@@ -618,3 +618,24 @@ def export_tickets_pdf(request):
     story.append(table)
     doc.build(story)
     return response
+
+
+def fetch_live_status_action(request, machine_code):
+    """
+    Directly queries the physical FANUC CNC controller via FOCAS Ethernet
+    and updates the machine status immediately.
+    """
+    machine = get_object_or_404(CNCMachine, machine_code=machine_code)
+    success, result = TelemetryCollector.poll_focas_machine(machine)
+    if success:
+        messages.success(
+            request,
+            f"Live FOCAS Telemetry Received for {machine.machine_code}! Status: {result['derived_status']} ({result['status_text']}). Mode: {result['aut_mode_name']}, Run: {result['run_status_name']}."
+        )
+    else:
+        messages.warning(
+            request,
+            f"Could not connect to CNC at {machine.ip_address}:{machine.port} (FOCAS response: {result}). Status updated to OFFLINE."
+        )
+    return redirect('machine_detail', machine_code=machine.machine_code)
+

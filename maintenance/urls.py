@@ -10,6 +10,7 @@ urlpatterns = [
     path('machines/', views.machine_list_view, name='machine_list'),
     path('machines/<str:machine_code>/', views.machine_detail_view, name='machine_detail'),
     path('machines/<str:machine_code>/qr-print/', views.qr_print_view, name='qr_print'),
+    path('machines/<str:machine_code>/fetch-live-status/', views.fetch_live_status_action, name='fetch_live_status'),
 
     # 3. Technician Mobile QR Scanner & Workflow (Section 3)
     path('scanner/', views.scanner_view, name='scanner'),

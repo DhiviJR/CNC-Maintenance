@@ -16,7 +16,21 @@ class CNCMachineAdmin(admin.ModelAdmin):
     list_display = ('machine_code', 'name', 'model_number', 'ip_address', 'port', 'status_badge', 'qr_preview', 'is_active', 'last_polled_at')
     list_filter = ('current_status', 'is_active', 'controller_type')
     search_fields = ('machine_code', 'name', 'ip_address', 'location')
-    readonly_fields = ('qr_preview_large', 'created_at', 'updated_at')
+    readonly_fields = ('current_status', 'last_status_change', 'last_polled_at', 'qr_preview_large', 'created_at', 'updated_at')
+    actions = ['sync_focas_status']
+
+    @admin.action(description="⚡ Poll Live Status from CNC via FOCAS")
+    def sync_focas_status(self, request, queryset):
+        from .focas.collector import TelemetryCollector
+        success_count = 0
+        fail_count = 0
+        for m in queryset:
+            ok, res = TelemetryCollector.poll_focas_machine(m)
+            if ok:
+                success_count += 1
+            else:
+                fail_count += 1
+        self.message_user(request, f"FOCAS Polling Finished: {success_count} machine(s) online & updated, {fail_count} offline/unreachable.")
 
     def status_badge(self, obj):
         colors = {

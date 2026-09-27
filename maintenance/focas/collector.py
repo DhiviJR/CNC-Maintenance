@@ -100,6 +100,9 @@ class TelemetryCollector:
         """
         Polls a real machine via FOCAS client. Falls back cleanly if unreachable.
         """
+        now = timezone.now()
+        machine.last_polled_at = now
+
         if client is None:
             try:
                 client = FanucFocasClient(
@@ -109,6 +112,10 @@ class TelemetryCollector:
                 )
             except Exception as e:
                 logger.error(f"Cannot initialize FOCAS client for {machine.machine_code}: {e}")
+                if machine.current_status != 'OFFLINE':
+                    machine.current_status = 'OFFLINE'
+                    machine.last_status_change = now
+                machine.save()
                 return False, str(e)
 
         success, result = client.read_status()
@@ -118,4 +125,8 @@ class TelemetryCollector:
             return True, decoded
         else:
             logger.warning(f"FOCAS read failed for {machine.machine_code}: {result}")
+            if machine.current_status != 'OFFLINE':
+                machine.current_status = 'OFFLINE'
+                machine.last_status_change = now
+            machine.save()
             return False, result
