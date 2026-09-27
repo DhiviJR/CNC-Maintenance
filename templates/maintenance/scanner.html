@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+
+{% block title %}Scan Machine QR | CNC Maintenance{% endblock %}
+
+{% block extra_head %}
+<!-- HTML5 QR Code Library -->
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+    <!-- Header Card -->
+    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 text-center">
+        <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3 text-xl shadow-sm">
+            <i class="fa-solid fa-qrcode"></i>
+        </div>
+        <h1 class="text-xl font-bold text-slate-900">Step 3.a & 3.b: Physical Machine QR Verification</h1>
+        <p class="text-xs text-slate-500 mt-1">
+            Point camera at the QR code affixed to the physical CNC machine to log attendance time (<em>t<sub>scan</sub></em>) and acknowledge the breakdown ticket.
+        </p>
+    </div>
+
+    <!-- Live Camera Scanner Viewport -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <div id="qr-reader" class="w-full rounded-lg overflow-hidden border-2 border-dashed border-slate-300"></div>
+        <div id="qr-reader-results" class="mt-3 text-center text-sm font-semibold text-emerald-600"></div>
+
+        <div class="flex justify-center gap-3 mt-4">
+            <button id="btn-start-scan" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg shadow-sm flex items-center gap-2">
+                <i class="fa-solid fa-camera"></i> Start Camera Scanner
+            </button>
+            <button id="btn-stop-scan" class="hidden px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white text-sm font-semibold rounded-lg shadow-sm flex items-center gap-2">
+                <i class="fa-solid fa-stop"></i> Stop Camera
+            </button>
+        </div>
+    </div>
+
+    <!-- Fallback / Desktop Quick Verification -->
+    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+        <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-keyboard text-slate-500"></i> Manual Entry / Test Machine Scan
+        </h2>
+        <p class="text-xs text-slate-500 mb-4">If testing on a desktop or testing barcode without camera, select the machine below to simulate physical attendance:</p>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {% for m in machines %}
+            <a href="{% url 'scan_machine' m.machine_code %}" class="flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 transition-colors group">
+                <div>
+                    <span class="font-bold text-sm text-slate-900 group-hover:text-emerald-700">{{ m.machine_code }}</span>
+                    <span class="block text-xs text-slate-500">{{ m.name }}</span>
+                </div>
+                <span class="text-xs px-2 py-1 rounded font-semibold {% if m.current_status == 'ALARM' or m.current_status == 'EMERGENCY_STOP' %}bg-red-100 text-red-700 animate-pulse{% elif m.current_status == 'RUNNING' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-700{% endif %}">
+                    {{ m.get_current_status_display }}
+                </span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let html5QrCode = null;
+
+    function onScanSuccess(decodedText, decodedResult) {
+        console.log(`Code matched = ${decodedText}`, decodedResult);
+        document.getElementById('qr-reader-results').innerText = `Scanned: ${decodedText}. Verifying attendance...`;
+
+        // Stop scanning
+        if (html5QrCode) {
+            html5QrCode.stop().then(() => {
+                redirectScan(decodedText);
+            }).catch(err => {
+                redirectScan(decodedText);
+            });
+        } else {
+            redirectScan(decodedText);
+        }
+    }
+
+    function redirectScan(text) {
+        // Expected format: "CNC_MACHINE:CNC-01" or "CNC-01"
+        let machineCode = text;
+        if (text.startsWith("CNC_MACHINE:")) {
+            machineCode = text.replace("CNC_MACHINE:", "");
+        }
+        window.location.href = `/scan/${encodeURIComponent(machineCode)}/`;
+    }
+
+    document.getElementById('btn-start-scan').addEventListener('click', function() {
+        html5QrCode = new Html5Qrcode("qr-reader");
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+        
+        html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
+            .then(() => {
+                document.getElementById('btn-start-scan').classList.add('hidden');
+                document.getElementById('btn-stop-scan').classList.remove('hidden');
+            })
+            .catch(err => {
+                console.error("Camera start error:", err);
+                alert("Camera permission denied or camera not found on device.");
+            });
+    });
+
+    document.getElementById('btn-stop-scan').addEventListener('click', function() {
+        if (html5QrCode) {
+            html5QrCode.stop().then(() => {
+                document.getElementById('btn-start-scan').classList.remove('hidden');
+                document.getElementById('btn-stop-scan').classList.add('hidden');
+            });
+        }
+    });
+</script>
+{% endblock %}

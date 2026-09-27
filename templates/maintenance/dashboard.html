@@ -1,0 +1,404 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard | CNC Maintenance & Downtime Tracking{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Top Bar with Filters -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                <i class="fa-solid fa-chart-pie text-blue-600"></i> Executive Maintenance Dashboard
+            </h1>
+            <p class="text-sm text-slate-500">Real-time CNC telemetry, TPM metrics, 4M root-cause analysis & maintenance financials</p>
+        </div>
+
+        <!-- Filter Form -->
+        <form method="get" class="flex flex-wrap items-center gap-2">
+            <select name="days" class="text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-slate-50 focus:ring-2 focus:ring-blue-500" onchange="this.form.submit()">
+                <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 Days</option>
+                <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 Days</option>
+                <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 Days (Quarter)</option>
+                <option value="365" {% if days == 365 %}selected{% endif %}>Last 365 Days (Year)</option>
+            </select>
+
+            <select name="machine" class="text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-slate-50 focus:ring-2 focus:ring-blue-500" onchange="this.form.submit()">
+                <option value="">All CNC Machines</option>
+                {% for m in machines %}
+                    <option value="{{ m.machine_code }}" {% if selected_machine == m.machine_code %}selected{% endif %}>{{ m.machine_code }} - {{ m.name }}</option>
+                {% endfor %}
+            </select>
+
+            <select name="shift" class="text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-slate-50 focus:ring-2 focus:ring-blue-500" onchange="this.form.submit()">
+                <option value="">All Shifts</option>
+                <option value="Shift A" {% if selected_shift == 'Shift A' %}selected{% endif %}>Shift A (06:00 - 14:00)</option>
+                <option value="Shift B" {% if selected_shift == 'Shift B' %}selected{% endif %}>Shift B (14:00 - 22:00)</option>
+                <option value="Shift C" {% if selected_shift == 'Shift C' %}selected{% endif %}>Shift C (22:00 - 06:00)</option>
+            </select>
+
+            <a href="{% url 'dashboard' %}" class="text-sm text-slate-500 hover:text-slate-800 px-2 py-1.5">Reset</a>
+        </form>
+    </div>
+
+    <!-- Active Alarms Banner (if any) -->
+    {% if active_alarms %}
+    <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl shadow-sm">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-bold text-red-900 flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-red-600 animate-ping"></span>
+                ACTIVE BREAKDOWNS REQUIRING ATTENDANCE ({{ active_alarms|length }})
+            </h3>
+            <a href="{% url 'scanner' %}" class="inline-flex items-center px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow-sm">
+                <i class="fa-solid fa-qrcode mr-1.5"></i> Scan Machine QR
+            </a>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {% for t in active_alarms %}
+            <div class="bg-white p-3 rounded-lg border border-red-200 flex justify-between items-center shadow-xs">
+                <div>
+                    <div class="font-bold text-slate-900 text-sm">{{ t.machine.machine_code }} - {{ t.machine.name }}</div>
+                    <div class="text-xs text-red-600 font-medium">{{ t.focas_alarm_code|default:t.get_trigger_source_display }}</div>
+                    <div class="text-[11px] text-slate-500">Alarmed: {{ t.alarm_time|timesince }} ago</div>
+                </div>
+                <div>
+                    <a href="{% url 'ticket_detail' t.id %}" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded shadow-sm">
+                        {% if t.status == 'OPEN_ALARM' %}Scan QR & Attend{% else %}Continue Repair{% endif %}
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 4.a Fleet Status & Key Metrics KPI Row -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <!-- Running -->
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+            <div class="flex items-center justify-between text-emerald-600 mb-1">
+                <span class="text-xs font-semibold uppercase tracking-wider">4.a Running CNC</span>
+                <i class="fa-solid fa-circle-play text-lg"></i>
+            </div>
+            <div class="text-3xl font-extrabold text-slate-900">{{ running_count }}</div>
+            <div class="text-xs text-slate-500 mt-1">{{ utilization_pct }}% Fleet Utilization</div>
+        </div>
+
+        <!-- Idle -->
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+            <div class="flex items-center justify-between text-amber-500 mb-1">
+                <span class="text-xs font-semibold uppercase tracking-wider">4.a Idle CNC</span>
+                <i class="fa-solid fa-circle-pause text-lg"></i>
+            </div>
+            <div class="text-3xl font-extrabold text-slate-900">{{ idle_count }}</div>
+            <div class="text-xs text-slate-500 mt-1">Spindle Stopped / Setup</div>
+        </div>
+
+        <!-- Alarms -->
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+            <div class="flex items-center justify-between text-red-600 mb-1">
+                <span class="text-xs font-semibold uppercase tracking-wider">Breakdown / Alarm</span>
+                <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+            </div>
+            <div class="text-3xl font-extrabold text-slate-900">{{ alarm_count }}</div>
+            <div class="text-xs text-slate-500 mt-1">E-Stop & Alarms</div>
+        </div>
+
+        <!-- 4.b MTTA (Response Speed) -->
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+            <div class="flex items-center justify-between text-blue-600 mb-1">
+                <span class="text-xs font-semibold uppercase tracking-wider">4.b Avg MTTA</span>
+                <i class="fa-solid fa-stopwatch text-lg"></i>
+            </div>
+            <div class="text-3xl font-extrabold text-slate-900">{{ avg_mtta_min }}<span class="text-sm font-normal text-slate-500 ml-1">min</span></div>
+            <div class="text-xs text-slate-500 mt-1">Alarm to QR Scan Arrival</div>
+        </div>
+
+        <!-- 4.b MTTR (Resolution Speed) -->
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+            <div class="flex items-center justify-between text-purple-600 mb-1">
+                <span class="text-xs font-semibold uppercase tracking-wider">4.b Avg MTTR</span>
+                <i class="fa-solid fa-clock-rotate-left text-lg"></i>
+            </div>
+            <div class="text-3xl font-extrabold text-slate-900">{{ avg_mttr_min }}<span class="text-sm font-normal text-slate-500 ml-1">min</span></div>
+            <div class="text-xs text-slate-500 mt-1">Mean Time To Repair</div>
+        </div>
+
+        <!-- 4.e Maintenance Cost -->
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+            <div class="flex items-center justify-between text-indigo-600 mb-1">
+                <span class="text-xs font-semibold uppercase tracking-wider">4.e Spares Cost</span>
+                <i class="fa-solid fa-indian-rupee-sign text-lg"></i>
+            </div>
+            <div class="text-2xl font-extrabold text-slate-900">₹{{ total_maintenance_cost|floatformat:0 }}</div>
+            <div class="text-xs text-slate-500 mt-1">{{ total_tickets }} Incidents Logged</div>
+        </div>
+    </div>
+
+    <!-- Charts Row 1: Fleet Distribution & 4M Failure Pareto -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- 4.a Fleet State Donut Chart -->
+        <div class="lg:col-span-4 bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-base font-bold text-slate-900">4.a Fleet Status (Running vs Idle)</h2>
+                <span class="text-xs px-2 py-0.5 bg-slate-100 rounded text-slate-600 font-semibold">{{ total_machines }} CNCs</span>
+            </div>
+            <div class="relative h-64 flex items-center justify-center">
+                <canvas id="fleetStatusChart"></canvas>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center text-xs pt-4 border-t border-slate-100 mt-2">
+                <div>
+                    <span class="block font-bold text-emerald-600 text-sm">{{ running_count }}</span>
+                    <span class="text-slate-500">Running</span>
+                </div>
+                <div>
+                    <span class="block font-bold text-amber-500 text-sm">{{ idle_count }}</span>
+                    <span class="text-slate-500">Idle</span>
+                </div>
+                <div>
+                    <span class="block font-bold text-red-600 text-sm">{{ alarm_count }}</span>
+                    <span class="text-slate-500">Alarm / Down</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4.d 4M Root-Cause Pareto Analysis -->
+        <div class="lg:col-span-8 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900">4.d 4M Failure Root-Cause Analysis</h2>
+                    <p class="text-xs text-slate-500">Distribution across Man, Machine, Material, Method</p>
+                </div>
+                <div class="flex gap-1 text-xs">
+                    <span class="px-2 py-0.5 bg-blue-50 text-blue-700 rounded font-medium">Pareto Analysis</span>
+                </div>
+            </div>
+            <div class="h-64">
+                <canvas id="fourMParetoChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row 2: Breakdown Frequency & Maintenance Costs -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- 4.c Machine Breakdown Frequency (Failures per machine) -->
+        <div class="lg:col-span-6 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900">4.c Breakdown Frequency per CNC Machine</h2>
+                    <p class="text-xs text-slate-500">Identification of recurring / bad-actor machines</p>
+                </div>
+            </div>
+            <div class="h-64">
+                <canvas id="breakdownFrequencyChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 4.e Maintenance Cost Breakdown per Machine -->
+        <div class="lg:col-span-6 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900">4.e Maintenance Cost per CNC (₹)</h2>
+                    <p class="text-xs text-slate-500">Aggregated spare parts and tooling consumption</p>
+                </div>
+            </div>
+            <div class="h-64">
+                <canvas id="maintenanceCostChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Machine Reliability Table (MTBF & Availability) -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
+            <div>
+                <h3 class="text-base font-bold text-slate-900">CNC Machine Reliability Ranking (MTBF & Availability)</h3>
+                <p class="text-xs text-slate-500">Calculated over selected period ({{ days }} days)</p>
+            </div>
+            <div class="flex space-x-2">
+                <a href="{% url 'export_excel' %}" class="inline-flex items-center px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 shadow-xs">
+                    <i class="fa-solid fa-file-excel text-emerald-600 mr-1.5"></i> Export Excel
+                </a>
+                <a href="{% url 'export_pdf' %}" class="inline-flex items-center px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 shadow-xs">
+                    <i class="fa-solid fa-file-pdf text-red-600 mr-1.5"></i> Export PDF
+                </a>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-sm">
+                <thead class="bg-slate-50 text-slate-600 text-xs uppercase font-semibold">
+                    <tr>
+                        <th class="py-3 px-4 text-left">Machine Code</th>
+                        <th class="py-3 px-4 text-left">Machine Name</th>
+                        <th class="py-3 px-4 text-center">Failures (Count)</th>
+                        <th class="py-3 px-4 text-center">Downtime (Hours)</th>
+                        <th class="py-3 px-4 text-center">MTBF (Hours)</th>
+                        <th class="py-3 px-4 text-center">Availability (%)</th>
+                        <th class="py-3 px-4 text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for item in machine_reliability %}
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <td class="py-3 px-4 font-bold text-blue-600">
+                            <a href="{% url 'machine_detail' item.code %}" class="hover:underline">{{ item.code }}</a>
+                        </td>
+                        <td class="py-3 px-4 text-slate-800">{{ item.name }}</td>
+                        <td class="py-3 px-4 text-center font-semibold">
+                            <span class="inline-block px-2 py-0.5 rounded-full text-xs {% if item.count > 3 %}bg-red-100 text-red-700{% elif item.count > 0 %}bg-amber-100 text-amber-700{% else %}bg-emerald-100 text-emerald-700{% endif %}">
+                                {{ item.count }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-center text-slate-600">{{ item.downtime_hrs }} hrs</td>
+                        <td class="py-3 px-4 text-center font-bold text-slate-800">{{ item.mtbf }} hrs</td>
+                        <td class="py-3 px-4 text-center">
+                            <div class="flex items-center justify-center gap-2">
+                                <span class="font-semibold text-xs {% if item.availability >= 90 %}text-emerald-600{% elif item.availability >= 75 %}text-amber-600{% else %}text-red-600{% endif %}">
+                                    {{ item.availability }}%
+                                </span>
+                                <div class="w-16 bg-slate-200 rounded-full h-1.5">
+                                    <div class="{% if item.availability >= 90 %}bg-emerald-500{% elif item.availability >= 75 %}bg-amber-500{% else %}bg-red-500{% endif %} h-1.5 rounded-full" style="width: {{ item.availability }}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <a href="{% url 'qr_print' item.code %}" target="_blank" class="text-slate-400 hover:text-slate-700 text-xs" title="Print QR Sticker">
+                                <i class="fa-solid fa-qrcode text-base"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-6 text-center text-slate-400">No failure data recorded in this period.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // -------------------------------------------------------------------------
+    // 1. Chart: Fleet Status (Running vs Idle vs Alarm)
+    // -------------------------------------------------------------------------
+    const fleetCtx = document.getElementById('fleetStatusChart').getContext('2d');
+    new Chart(fleetCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Running', 'Idle', 'Alarm/E-Stop', 'Maintenance', 'Offline'],
+            datasets: [{
+                data: [{{ running_count }}, {{ idle_count }}, {{ alarm_count }}, {{ maintenance_count }}, {{ offline_count }}],
+                backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#9ca3af'],
+                borderWidth: 2,
+                borderColor: '#ffffff',
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '72%',
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+            }
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // 2. Chart: 4M Failure Root-Cause Pareto
+    // -------------------------------------------------------------------------
+    const fourMCtx = document.getElementById('fourMParetoChart').getContext('2d');
+    const catLabels = [{% for c in category_summary %}'{{ c.failure_sub_category__category__name }}',{% empty %}'No Data'{% endfor %}];
+    const catCounts = [{% for c in category_summary %}{{ c.count }},{% empty %}0{% endfor %}];
+
+    new Chart(fourMCtx, {
+        type: 'bar',
+        data: {
+            labels: catLabels,
+            datasets: [{
+                label: 'Failure Count',
+                data: catCounts,
+                backgroundColor: ['#3b82f6', '#ef4444', '#f59e0b', '#10b981'],
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 } }
+            }
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // 3. Chart: Breakdown Frequency per Machine
+    // -------------------------------------------------------------------------
+    const freqCtx = document.getElementById('breakdownFrequencyChart').getContext('2d');
+    const machineCodes = [{% for item in machine_reliability %}'{{ item.code }}',{% empty %}'None'{% endfor %}];
+    const machineFailures = [{% for item in machine_reliability %}{{ item.count }},{% empty %}0{% endfor %}];
+
+    new Chart(freqCtx, {
+        type: 'bar',
+        data: {
+            labels: machineCodes,
+            datasets: [{
+                label: 'Number of Breakdowns',
+                data: machineFailures,
+                backgroundColor: '#f87171',
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // 4. Chart: Maintenance Cost per Machine
+    // -------------------------------------------------------------------------
+    const costCtx = document.getElementById('maintenanceCostChart').getContext('2d');
+    const costMachines = [{% for c in cost_by_machine %}'{{ c.machine__machine_code }}',{% empty %}'None'{% endfor %}];
+    const costValues = [{% for c in cost_by_machine %}{{ c.cost|default:0 }},{% empty %}0{% endfor %}];
+
+    new Chart(costCtx, {
+        type: 'bar',
+        data: {
+            labels: costMachines,
+            datasets: [{
+                label: 'Spares Cost (₹)',
+                data: costValues,
+                backgroundColor: '#6366f1',
+                borderRadius: 6
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true } }
+        }
+    });
+
+    // Auto-refresh data every 10 seconds
+    setInterval(() => {
+        fetch("{% url 'api_dashboard_data' %}")
+            .then(res => res.json())
+            .then(data => {
+                // If new alarm occurred, play chime if desired
+            })
+            .catch(err => console.error(err));
+    }, 10000);
+</script>
+{% endblock %}

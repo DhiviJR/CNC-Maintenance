@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+
+{% block title %}Interactive CNC Simulator | CNC Maintenance{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <i class="fa-solid fa-gamepad text-purple-600"></i> Interactive FANUC CNC Simulator
+            </h1>
+            <p class="text-xs text-slate-500">
+                Simulate CNC controller FOCAS signals (Running, Idle, Alarm, Emergency Stop) to test the end-to-end downtime tracking pipeline without physical machines.
+            </p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'andon_board' %}" target="_blank" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5">
+                <i class="fa-solid fa-tv"></i> Open Andon TV
+            </a>
+            <a href="{% url 'dashboard' %}" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5">
+                <i class="fa-solid fa-chart-line"></i> View Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Simulator Deck Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for m in machines %}
+        <div id="sim-card-{{ m.machine_code }}" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
+            <!-- Machine Top -->
+            <div class="flex justify-between items-start border-b border-slate-100 pb-3">
+                <div>
+                    <span class="text-xs font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">{{ m.machine_code }}</span>
+                    <h3 class="text-sm font-bold text-slate-900 mt-1">{{ m.name }}</h3>
+                    <p class="text-[11px] text-slate-400">{{ m.ip_address }}:{{ m.port }}</p>
+                </div>
+                <span id="badge-{{ m.machine_code }}" class="px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider
+                    {% if m.current_status == 'RUNNING' %}bg-emerald-100 text-emerald-800
+                    {% elif m.current_status == 'IDLE' %}bg-amber-100 text-amber-800
+                    {% elif m.current_status == 'ALARM' or m.current_status == 'EMERGENCY_STOP' %}bg-red-100 text-red-800 animate-pulse
+                    {% elif m.current_status == 'UNDER_MAINTENANCE' %}bg-blue-100 text-blue-800
+                    {% else %}bg-slate-100 text-slate-700{% endif %}">
+                    {{ m.get_current_status_display }}
+                </span>
+            </div>
+
+            <!-- Inject State Buttons -->
+            <div>
+                <span class="block text-[11px] font-bold text-slate-500 uppercase mb-2">Inject Controller State:</span>
+                <div class="grid grid-cols-2 gap-2">
+                    <!-- RUNNING -->
+                    <button onclick="injectState('{{ m.machine_code }}', 'RUNNING')" class="py-2 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors">
+                        <i class="fa-solid fa-play"></i> Running (Auto)
+                    </button>
+
+                    <!-- IDLE -->
+                    <button onclick="injectState('{{ m.machine_code }}', 'IDLE')" class="py-2 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors">
+                        <i class="fa-solid fa-pause"></i> Idle (Stopped)
+                    </button>
+
+                    <!-- ALARM -->
+                    <button onclick="injectAlarmPrompt('{{ m.machine_code }}')" class="py-2 px-3 bg-red-50 hover:bg-red-100 border border-red-300 text-red-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors">
+                        <i class="fa-solid fa-bell"></i> Trigger Alarm
+                    </button>
+
+                    <!-- EMERGENCY STOP -->
+                    <button onclick="injectState('{{ m.machine_code }}', 'EMERGENCY_STOP', 'EMG-01', 'Emergency Stop Button Pushed')" class="py-2 px-3 bg-red-800 hover:bg-red-900 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors">
+                        <i class="fa-solid fa-hand"></i> E-Stop Button
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Action Links -->
+            <div class="pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
+                <a href="{% url 'scan_machine' m.machine_code %}" class="text-blue-600 hover:underline font-semibold flex items-center gap-1">
+                    <i class="fa-solid fa-qrcode"></i> Simulate QR Scan
+                </a>
+                <a href="{% url 'machine_detail' m.machine_code %}" class="text-slate-500 hover:text-slate-800">
+                    Machine View &rarr;
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function injectState(machineCode, state, alarmCode = null, alarmMsg = null) {
+        fetch("{% url 'api_simulate_action' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                machine_code: machineCode,
+                state: state,
+                alarm_code: alarmCode,
+                alarm_msg: alarmMsg
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                const badge = document.getElementById(`badge-${machineCode}`);
+                if (badge) {
+                    badge.innerText = data.new_status;
+                    if (data.new_status === 'RUNNING') {
+                        badge.className = "px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800";
+                    } else if (data.new_status === 'IDLE') {
+                        badge.className = "px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-800";
+                    } else if (data.new_status === 'ALARM' || data.new_status === 'EMERGENCY_STOP') {
+                        badge.className = "px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-red-100 text-red-800 animate-pulse";
+                    }
+                }
+                alert(`Machine ${machineCode} status changed to ${data.new_status}!`);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Error communicating with simulator API.");
+        });
+    }
+
+    function injectAlarmPrompt(machineCode) {
+        const alarms = [
+            { code: "DS0300 (APC) AXIS NEED ZRN", msg: "Servo reference return required on X/Z axis." },
+            { code: "EX1022 SPINDLE OVERHEAT", msg: "Spindle motor temperature exceeded safe threshold (75°C)." },
+            { code: "AL-401 SERVO VRDY OFF", msg: "X-Axis servo velocity control ready signal OFF." },
+            { code: "PN-05 LOW AIR PRESSURE", msg: "Pneumatic supply dropped below 4.5 bar interlock." },
+            { code: "HYD-02 HYDRAULIC PRESSURE LOW", msg: "Hydraulic chuck clamping pressure fault." }
+        ];
+
+        let msg = "Select Alarm to trigger:\n";
+        alarms.forEach((a, i) => {
+            msg += `${i + 1}. ${a.code}\n`;
+        });
+
+        const choice = prompt(msg, "1");
+        if (choice) {
+            const idx = parseInt(choice) - 1;
+            if (idx >= 0 && idx < alarms.length) {
+                injectState(machineCode, 'ALARM', alarms[idx].code, alarms[idx].msg);
+            }
+        }
+    }
+</script>
+{% endblock %}

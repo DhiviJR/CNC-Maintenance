@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ machine.machine_code }} | CNC Maintenance{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Machine Header -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <div class="flex items-center gap-3">
+                <span class="text-sm font-mono font-bold bg-blue-100 text-blue-800 px-2.5 py-1 rounded">{{ machine.machine_code }}</span>
+                <h1 class="text-2xl font-bold text-slate-900">{{ machine.name }}</h1>
+            </div>
+            <p class="text-sm text-slate-500 mt-1">
+                Model: {{ machine.model_number }} | Controller: {{ machine.controller_type }} | IP: {{ machine.ip_address }}:{{ machine.port }} | Location: {{ machine.location }}
+            </p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <span class="px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider
+                {% if machine.current_status == 'RUNNING' %}bg-emerald-100 text-emerald-800
+                {% elif machine.current_status == 'IDLE' %}bg-amber-100 text-amber-800
+                {% elif machine.current_status == 'ALARM' or machine.current_status == 'EMERGENCY_STOP' %}bg-red-100 text-red-800 animate-pulse
+                {% elif machine.current_status == 'UNDER_MAINTENANCE' %}bg-blue-100 text-blue-800
+                {% else %}bg-slate-100 text-slate-700{% endif %}">
+                Current Status: {{ machine.get_current_status_display }}
+            </span>
+            <a href="{% url 'qr_print' machine.machine_code %}" target="_blank" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5">
+                <i class="fa-solid fa-print"></i> Print QR
+            </a>
+            <a href="{% url 'create_ticket_for_machine' machine.machine_code %}" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5">
+                <i class="fa-solid fa-triangle-exclamation"></i> Log Incident
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left: QR Code & Telemetry Info -->
+        <div class="lg:col-span-4 space-y-6">
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 text-center">
+                <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3">Affixed QR Identifier</h3>
+                {% if machine.qr_code_image %}
+                <img src="{{ machine.qr_code_image.url }}" alt="QR Code" class="w-48 h-48 mx-auto border-2 border-slate-200 rounded-lg p-2 shadow-xs">
+                {% endif %}
+                <p class="text-xs text-slate-500 mt-3 font-mono">Payload: CNC_MACHINE:{{ machine.machine_code }}</p>
+                <div class="mt-4">
+                    <a href="{% url 'scan_machine' machine.machine_code %}" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-qrcode"></i> Test Scan Attendance
+                    </a>
+                </div>
+            </div>
+
+            <!-- FOCAS Connection Settings -->
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3">FOCAS Ethernet Configuration</h3>
+                <dl class="text-xs space-y-2 text-slate-600">
+                    <div class="flex justify-between border-b pb-1"><dt class="text-slate-400">IP Address:</dt><dd class="font-mono font-bold">{{ machine.ip_address }}</dd></div>
+                    <div class="flex justify-between border-b pb-1"><dt class="text-slate-400">Port:</dt><dd class="font-mono font-bold">{{ machine.port }}</dd></div>
+                    <div class="flex justify-between border-b pb-1"><dt class="text-slate-400">Timeout:</dt><dd class="font-mono">{{ machine.timeout }} seconds</dd></div>
+                    <div class="flex justify-between border-b pb-1"><dt class="text-slate-400">Last Polled:</dt><dd>{{ machine.last_polled_at|default:"Not polled yet" }}</dd></div>
+                    <div class="flex justify-between"><dt class="text-slate-400">Last Status Change:</dt><dd>{{ machine.last_status_change|timesince }} ago</dd></div>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Right: Recent Maintenance Tickets & Telemetry State History -->
+        <div class="lg:col-span-8 space-y-6">
+            <!-- Maintenance Tickets -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Breakdown & Maintenance History</h3>
+                    <span class="text-xs text-slate-500">{{ recent_tickets|length }} Recent Tickets</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-200 text-xs">
+                        <thead class="bg-slate-50 text-slate-600 font-semibold uppercase">
+                            <tr>
+                                <th class="py-2.5 px-3 text-left">Ticket</th>
+                                <th class="py-2.5 px-3 text-left">Alarm Time</th>
+                                <th class="py-2.5 px-3 text-center">Status</th>
+                                <th class="py-2.5 px-3 text-center">Response</th>
+                                <th class="py-2.5 px-3 text-center">MTTR</th>
+                                <th class="py-2.5 px-3 text-left">4M Cause</th>
+                                <th class="py-2.5 px-3 text-right">Spares Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for t in recent_tickets %}
+                            <tr class="hover:bg-slate-50">
+                                <td class="py-2.5 px-3 font-bold text-blue-600">
+                                    <a href="{% url 'ticket_detail' t.id %}" class="hover:underline">{{ t.ticket_number }}</a>
+                                </td>
+                                <td class="py-2.5 px-3 text-slate-700">{{ t.alarm_time|date:"d-M H:i" }}</td>
+                                <td class="py-2.5 px-3 text-center">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase
+                                        {% if t.status == 'OPEN_ALARM' %}bg-red-100 text-red-700
+                                        {% elif t.status == 'RESOLVED' %}bg-emerald-100 text-emerald-700
+                                        {% else %}bg-blue-100 text-blue-700{% endif %}">
+                                        {{ t.get_status_display }}
+                                    </span>
+                                </td>
+                                <td class="py-2.5 px-3 text-center text-slate-600">
+                                    {% if t.response_time_seconds %}{{ t.response_time_seconds }}s{% else %}-{% endif %}
+                                </td>
+                                <td class="py-2.5 px-3 text-center font-medium text-slate-800">
+                                    {% if t.total_downtime_seconds %}{{ t.total_downtime_seconds|divisibleby:60|yesno:"m,s" }} {{ t.total_downtime_seconds }}s{% else %}-{% endif %}
+                                </td>
+                                <td class="py-2.5 px-3 text-slate-600">
+                                    {{ t.failure_sub_category.name|default:"-" }}
+                                </td>
+                                <td class="py-2.5 px-3 text-right font-bold text-slate-800">
+                                    ₹{{ t.total_spares_cost|floatformat:2 }}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="py-4 text-center text-slate-400">No maintenance tickets recorded yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Recent Telemetry Logs -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 border-b border-slate-200 bg-slate-50/50">
+                    <h3 class="text-sm font-bold text-slate-900 uppercase tracking-wider">FOCAS State Transitions</h3>
+                </div>
+                <div class="p-4 space-y-2 max-h-60 overflow-y-auto text-xs font-mono">
+                    {% for log in recent_logs %}
+                    <div class="flex justify-between items-center py-1 border-b border-slate-100">
+                        <span class="text-slate-400">{{ log.start_time|date:"H:i:s d-M" }}</span>
+                        <span class="font-bold {% if log.state == 'RUNNING' %}text-emerald-600{% elif log.state == 'IDLE' %}text-amber-500{% elif log.state == 'ALARM' or log.state == 'EMERGENCY_STOP' %}text-red-600{% else %}text-slate-500{% endif %}">
+                            {{ log.state }}
+                        </span>
+                        <span class="text-slate-500">Duration: {{ log.duration_seconds }}s</span>
+                        <span class="text-slate-400">RUN:{{ log.run }} MOT:{{ log.motion }} EMG:{{ log.emergency }} ALM:{{ log.alarm }}</span>
+                    </div>
+                    {% empty %}
+                    <div class="text-slate-400 text-center py-2">No telemetry transitions logged yet.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

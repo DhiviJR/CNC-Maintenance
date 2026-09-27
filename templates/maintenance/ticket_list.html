@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}Maintenance Tickets | CNC Maintenance{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Top Action Bar -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <div>
+            <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <i class="fa-solid fa-clipboard-list text-blue-600"></i> Maintenance & Breakdown Tickets
+            </h1>
+            <p class="text-xs text-slate-500">Full audit log of alarms, attendance response times, 4M root-causes, and repair costs</p>
+        </div>
+
+        <div class="flex gap-2">
+            <a href="{% url 'export_excel' %}" class="inline-flex items-center px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 shadow-xs">
+                <i class="fa-solid fa-file-excel text-emerald-600 mr-1.5"></i> Export Excel
+            </a>
+            <a href="{% url 'export_pdf' %}" class="inline-flex items-center px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 shadow-xs">
+                <i class="fa-solid fa-file-pdf text-red-600 mr-1.5"></i> Export PDF
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters Bar -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <form method="get" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+            <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Status</label>
+                <select name="status" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-slate-50" onchange="this.form.submit()">
+                    <option value="">All Statuses</option>
+                    <option value="OPEN_ALARM" {% if selected_status == 'OPEN_ALARM' %}selected{% endif %}>Open Alarm (Pending Scan)</option>
+                    <option value="ACKNOWLEDGED" {% if selected_status == 'ACKNOWLEDGED' %}selected{% endif %}>Acknowledged (QR Scanned)</option>
+                    <option value="UNDER_REPAIR" {% if selected_status == 'UNDER_REPAIR' %}selected{% endif %}>Under Repair</option>
+                    <option value="RESOLVED" {% if selected_status == 'RESOLVED' %}selected{% endif %}>Resolved</option>
+                    <option value="CLOSED_RUNNING" {% if selected_status == 'CLOSED_RUNNING' %}selected{% endif %}>Closed / Running</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Machine</label>
+                <select name="machine" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-slate-50" onchange="this.form.submit()">
+                    <option value="">All Machines</option>
+                    {% for m in machines %}
+                    <option value="{{ m.machine_code }}" {% if selected_machine == m.machine_code %}selected{% endif %}>{{ m.machine_code }} - {{ m.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Shift</label>
+                <select name="shift" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-slate-50" onchange="this.form.submit()">
+                    <option value="">All Shifts</option>
+                    <option value="Shift A" {% if selected_shift == 'Shift A' %}selected{% endif %}>Shift A (06:00 - 14:00)</option>
+                    <option value="Shift B" {% if selected_shift == 'Shift B' %}selected{% endif %}>Shift B (14:00 - 22:00)</option>
+                    <option value="Shift C" {% if selected_shift == 'Shift C' %}selected{% endif %}>Shift C (22:00 - 06:00)</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">4M Category</label>
+                <select name="category" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-slate-50" onchange="this.form.submit()">
+                    <option value="">All 4M Categories</option>
+                    <option value="MAN" {% if selected_category == 'MAN' %}selected{% endif %}>Man</option>
+                    <option value="MACHINE" {% if selected_category == 'MACHINE' %}selected{% endif %}>Machine</option>
+                    <option value="MATERIAL" {% if selected_category == 'MATERIAL' %}selected{% endif %}>Material</option>
+                    <option value="METHOD" {% if selected_category == 'METHOD' %}selected{% endif %}>Method</option>
+                </select>
+            </div>
+
+            <div class="flex items-end">
+                <a href="{% url 'ticket_list' %}" class="w-full text-center py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg">
+                    Reset Filter
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Ticket Table -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-sm">
+                <thead class="bg-slate-50 text-slate-600 text-xs font-semibold uppercase">
+                    <tr>
+                        <th class="py-3 px-4 text-left">Ticket #</th>
+                        <th class="py-3 px-4 text-left">Machine</th>
+                        <th class="py-3 px-4 text-center">Status</th>
+                        <th class="py-3 px-4 text-left">Alarm Time</th>
+                        <th class="py-3 px-4 text-center">Response (MTTA)</th>
+                        <th class="py-3 px-4 text-center">MTTR</th>
+                        <th class="py-3 px-4 text-left">4M Cause</th>
+                        <th class="py-3 px-4 text-right">Spares Cost</th>
+                        <th class="py-3 px-4 text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for t in tickets %}
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <td class="py-3 px-4 font-bold text-blue-600">
+                            <a href="{% url 'ticket_detail' t.id %}" class="hover:underline">{{ t.ticket_number }}</a>
+                        </td>
+                        <td class="py-3 px-4 text-slate-900 font-semibold">{{ t.machine.machine_code }}</td>
+                        <td class="py-3 px-4 text-center">
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase
+                                {% if t.status == 'OPEN_ALARM' %}bg-red-100 text-red-800
+                                {% elif t.status == 'ACKNOWLEDGED' %}bg-amber-100 text-amber-800
+                                {% elif t.status == 'UNDER_REPAIR' %}bg-blue-100 text-blue-800
+                                {% elif t.status == 'RESOLVED' %}bg-emerald-100 text-emerald-800
+                                {% else %}bg-green-100 text-green-900{% endif %}">
+                                {{ t.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-slate-600 text-xs">{{ t.alarm_time|date:"d M Y H:i" }}</td>
+                        <td class="py-3 px-4 text-center text-xs font-medium text-slate-700">
+                            {% if t.response_time_seconds != None %}
+                                {{ t.response_time_seconds|divisibleby:60|yesno:"m,s" }} {{ t.response_time_seconds }}s
+                            {% else %}-{% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-center text-xs font-bold text-slate-800">
+                            {% if t.total_downtime_seconds != None %}
+                                {{ t.total_downtime_seconds|divisibleby:60|yesno:"m,s" }} {{ t.total_downtime_seconds }}s
+                            {% else %}-{% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-xs text-slate-600">
+                            {% if t.failure_sub_category %}
+                                <span class="font-bold text-slate-800">[{{ t.failure_sub_category.category.code }}]</span> {{ t.failure_sub_category.name }}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-right font-bold text-slate-900">
+                            ₹{{ t.total_spares_cost|floatformat:2 }}
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <a href="{% url 'ticket_detail' t.id %}" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-xs">
+                                View / Edit
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="9" class="py-8 text-center text-slate-400">No maintenance tickets matching filter criteria.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

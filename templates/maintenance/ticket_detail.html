@@ -1,0 +1,337 @@
+{% extends 'base.html' %}
+
+{% block title %}Ticket {{ ticket.ticket_number }} | CNC Maintenance{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+
+    <!-- Ticket Header & Quick Summary -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4 mb-4">
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-2xl font-bold text-slate-900">{{ ticket.ticket_number }}</h1>
+                    <span class="px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider
+                        {% if ticket.status == 'OPEN_ALARM' %}bg-red-100 text-red-800 border border-red-200
+                        {% elif ticket.status == 'ACKNOWLEDGED' %}bg-amber-100 text-amber-800 border border-amber-200
+                        {% elif ticket.status == 'UNDER_REPAIR' %}bg-blue-100 text-blue-800 border border-blue-200
+                        {% elif ticket.status == 'RESOLVED' %}bg-emerald-100 text-emerald-800 border border-emerald-200
+                        {% else %}bg-green-100 text-green-900 border border-green-200{% endif %}">
+                        {{ ticket.get_status_display }}
+                    </span>
+                </div>
+                <p class="text-sm text-slate-600 mt-1">
+                    Machine: <a href="{% url 'machine_detail' ticket.machine.machine_code %}" class="font-bold text-blue-600 hover:underline">{{ ticket.machine.machine_code }} - {{ ticket.machine.name }}</a>
+                    | Shift: <strong>{{ ticket.shift }}</strong>
+                    | Technician: <strong>{{ ticket.technician.username|default:"Unassigned" }}</strong>
+                </p>
+            </div>
+
+            <!-- FOCAS Alarm Banner -->
+            <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-right">
+                <span class="block text-xs font-semibold text-slate-500 uppercase">Triggered Alarm</span>
+                <span class="text-sm font-bold text-red-600">{{ ticket.focas_alarm_code|default:ticket.get_trigger_source_display }}</span>
+                {% if ticket.focas_alarm_msg %}
+                <span class="block text-xs text-slate-500 max-w-xs truncate">{{ ticket.focas_alarm_msg }}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 5-Step Process Timeline (Directly from handwritten notes) -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+            <!-- 1. Alarm Time -->
+            <div class="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                <span class="block text-[11px] font-bold text-slate-500 uppercase">1. Alarm Time (t_alarm)</span>
+                <span class="font-bold text-sm text-slate-900">{{ ticket.alarm_time|date:"H:i:s" }}</span>
+                <span class="block text-[11px] text-slate-400">{{ ticket.alarm_time|date:"d M Y" }}</span>
+            </div>
+
+            <!-- 2. Scan Time (t_scan) -->
+            <div class="p-3 rounded-lg {% if ticket.scan_time %}bg-emerald-50 border border-emerald-200{% else %}bg-slate-50 border border-slate-200{% endif %}">
+                <span class="block text-[11px] font-bold {% if ticket.scan_time %}text-emerald-700{% else %}text-slate-500{% endif %} uppercase">2. QR Scan (t_scan)</span>
+                {% if ticket.scan_time %}
+                    <span class="font-bold text-sm text-emerald-900">{{ ticket.scan_time|date:"H:i:s" }}</span>
+                    <span class="block text-[11px] text-emerald-600">Response: {{ ticket.response_time_seconds|default:0|divisibleby:60|yesno:"m,s" }} {{ ticket.response_time_seconds|default:0 }}s</span>
+                {% else %}
+                    <span class="font-semibold text-sm text-amber-600">Pending QR Scan</span>
+                    <span class="block text-[11px] text-slate-400">Waiting for on-site arrival</span>
+                {% endif %}
+            </div>
+
+            <!-- 3. Resolve Time (t_resolve) -->
+            <div class="p-3 rounded-lg {% if ticket.resolve_time %}bg-blue-50 border border-blue-200{% else %}bg-slate-50 border border-slate-200{% endif %}">
+                <span class="block text-[11px] font-bold {% if ticket.resolve_time %}text-blue-700{% else %}text-slate-500{% endif %} uppercase">3. Resolved (t_resolve)</span>
+                {% if ticket.resolve_time %}
+                    <span class="font-bold text-sm text-blue-900">{{ ticket.resolve_time|date:"H:i:s" }}</span>
+                    <span class="block text-[11px] text-blue-600">Repair: {{ ticket.repair_time_seconds|default:0 }}s</span>
+                {% else %}
+                    <span class="font-semibold text-sm text-slate-400">In Progress</span>
+                {% endif %}
+            </div>
+
+            <!-- 4. Next Run Time (t_run) -->
+            <div class="p-3 rounded-lg {% if ticket.next_run_time %}bg-green-50 border border-green-200{% else %}bg-slate-50 border border-slate-200{% endif %}">
+                <span class="block text-[11px] font-bold {% if ticket.next_run_time %}text-green-800{% else %}text-slate-500{% endif %} uppercase">4. Resumed (t_run)</span>
+                {% if ticket.next_run_time %}
+                    <span class="font-bold text-sm text-green-900">{{ ticket.next_run_time|date:"H:i:s" }}</span>
+                    <span class="block text-[11px] text-green-600">Ramp Delay: {{ ticket.ramp_up_delay_seconds|default:0 }}s</span>
+                {% else %}
+                    <span class="font-semibold text-sm text-slate-400">Awaiting restart</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3.a / 3.b Action: Physical Scan Verification if not yet scanned -->
+    {% if not ticket.scan_time %}
+    <div class="bg-amber-50 border-2 border-amber-300 p-5 rounded-xl text-center">
+        <h3 class="font-bold text-amber-900 text-lg">On-Site QR Verification Required</h3>
+        <p class="text-sm text-amber-700 mt-1">Technician must scan the physical QR code on the machine panel to log attendance.</p>
+        <div class="mt-4 flex justify-center gap-3">
+            <a href="{% url 'scan_machine' ticket.machine.machine_code %}" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg shadow-sm flex items-center gap-2">
+                <i class="fa-solid fa-qrcode text-lg"></i> Verify QR Scan Now
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Step 3.c & 3.d: 4M Failure Root-Cause Diagnosis (Mastered) -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h2 class="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
+            <i class="fa-solid fa-sitemap text-blue-600"></i> Step 3.c & 3.d: 4M Failure Root-Cause Classification
+        </h2>
+        <p class="text-xs text-slate-500 mb-4">Select the root-cause category and mastered sub-category (Man, Machine, Material, Method).</p>
+
+        {% if ticket.failure_sub_category %}
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+            <div>
+                <span class="inline-block px-2.5 py-0.5 bg-blue-600 text-white text-xs font-bold rounded uppercase">
+                    {{ ticket.failure_sub_category.category.code }} - {{ ticket.failure_sub_category.category.name }}
+                </span>
+                <h4 class="font-bold text-slate-900 text-base mt-1">
+                    {{ ticket.failure_sub_category.sub_category_code }}: {{ ticket.failure_sub_category.name }}
+                </h4>
+                {% if ticket.symptom_notes %}
+                <p class="text-sm text-slate-600 mt-1"><strong>Symptoms:</strong> {{ ticket.symptom_notes }}</p>
+                {% endif %}
+            </div>
+            {% if ticket.status != 'CLOSED_RUNNING' %}
+            <button onclick="document.getElementById('form-diagnosis').classList.toggle('hidden')" class="text-xs text-blue-600 font-semibold hover:underline">
+                Change Diagnosis
+            </button>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Form for Diagnosis -->
+        <form id="form-diagnosis" method="post" class="space-y-4 mt-4 {% if ticket.failure_sub_category %}hidden{% endif %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="submit_diagnosis">
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">1. Main 4M Category</label>
+                    <select id="main-category-select" class="w-full text-sm border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- Choose Category --</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat.code }}">{{ cat.get_code_display }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">2. Sub-Category (Mastered)</label>
+                    <select name="sub_category_id" id="sub-category-select" required class="w-full text-sm border border-slate-300 rounded-lg p-2.5 bg-slate-50 focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- Select Main Category First --</option>
+                        {% for cat in categories %}
+                            {% for sub in cat.sub_categories.all %}
+                                <option value="{{ sub.id }}" data-cat="{{ cat.code }}" class="hidden">
+                                    {{ sub.sub_category_code }} - {{ sub.name }}
+                                </option>
+                            {% endfor %}
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Symptom / Failure Observation Notes</label>
+                <textarea name="symptom_notes" rows="2" class="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500" placeholder="Describe abnormal noise, sensor code, or workpiece defect observed...">{{ ticket.symptom_notes }}</textarea>
+            </div>
+
+            <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm">
+                Save 4M Diagnosis
+            </button>
+        </form>
+    </div>
+
+    <!-- Step 3.e: Spares / Tools Replaced (Mastered Catalog & Pricing) -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <div class="flex justify-between items-center mb-2">
+            <div>
+                <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-toolbox text-blue-600"></i> Step 3.e: Replaced Spare Parts & Tooling
+                </h2>
+                <p class="text-xs text-slate-500">Mastered parts catalog with automatic cost calculation</p>
+            </div>
+            <div class="text-right">
+                <span class="block text-xs text-slate-400 uppercase font-semibold">Total Spares Cost</span>
+                <span class="text-xl font-extrabold text-blue-700">₹{{ ticket.total_spares_cost|floatformat:2 }}</span>
+            </div>
+        </div>
+
+        <!-- Parts Usage Table -->
+        <div class="overflow-x-auto my-4">
+            <table class="min-w-full divide-y divide-slate-200 text-sm border rounded-lg">
+                <thead class="bg-slate-50 text-slate-600 text-xs font-semibold uppercase">
+                    <tr>
+                        <th class="py-2.5 px-3 text-left">Part Code</th>
+                        <th class="py-2.5 px-3 text-left">Part Name</th>
+                        <th class="py-2.5 px-3 text-center">Qty</th>
+                        <th class="py-2.5 px-3 text-right">Unit Price (₹)</th>
+                        <th class="py-2.5 px-3 text-right">Line Total (₹)</th>
+                        {% if ticket.status != 'CLOSED_RUNNING' %}
+                        <th class="py-2.5 px-3 text-center">Action</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for sp in ticket.spares_used.all %}
+                    <tr>
+                        <td class="py-2 px-3 font-bold text-slate-800">{{ sp.spare_part.part_code }}</td>
+                        <td class="py-2 px-3 text-slate-700">{{ sp.spare_part.part_name }}</td>
+                        <td class="py-2 px-3 text-center font-medium">{{ sp.quantity }} {{ sp.spare_part.unit_of_measure }}</td>
+                        <td class="py-2 px-3 text-right text-slate-600">₹{{ sp.unit_price_at_use }}</td>
+                        <td class="py-2 px-3 text-right font-bold text-slate-900">₹{{ sp.line_total }}</td>
+                        {% if ticket.status != 'CLOSED_RUNNING' %}
+                        <td class="py-2 px-3 text-center">
+                            <form method="post" class="inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="remove_spare">
+                                <input type="hidden" name="usage_id" value="{{ sp.id }}">
+                                <button type="submit" class="text-red-500 hover:text-red-700 text-xs font-semibold" onclick="return confirm('Remove part from log?')">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="py-4 text-center text-slate-400 text-xs">No spare parts replaced yet. (If no parts replaced, proceed to resolution).</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Add Spare Part Form -->
+        {% if ticket.status != 'CLOSED_RUNNING' %}
+        <form method="post" class="bg-slate-50 p-4 rounded-lg border border-slate-200 mt-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_spare">
+            <h4 class="text-xs font-bold text-slate-700 uppercase mb-2">+ Add Replaced Part from Catalog</h4>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                <div class="md:col-span-6">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Select Spare / Tool</label>
+                    <select name="part_code" required class="w-full text-sm border border-slate-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- Choose Spare Part --</option>
+                        {% for p in spare_parts %}
+                        <option value="{{ p.part_code }}">{{ p.part_code }} - {{ p.part_name }} (₹{{ p.unit_price }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Quantity</label>
+                    <input type="number" step="1" min="1" name="quantity" value="1" required class="w-full text-sm border border-slate-300 rounded-lg p-2 bg-white">
+                </div>
+                <div class="md:col-span-4">
+                    <button type="submit" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg shadow-sm">
+                        <i class="fa-solid fa-plus mr-1"></i> Add Part
+                    </button>
+                </div>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+
+    <!-- Step 3.f & 3.g: Resolution Complete & Production Resumption -->
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h2 class="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
+            <i class="fa-solid fa-flag-checkered text-blue-600"></i> Step 3.f & 3.g: Resolution & Production Resumption
+        </h2>
+
+        {% if ticket.status == 'ACKNOWLEDGED' or ticket.status == 'UNDER_REPAIR' %}
+        <!-- Complete Repair Form -->
+        <form method="post" class="space-y-4 mt-4">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="complete_repair">
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Resolution & Corrective Actions Notes</label>
+                <textarea name="resolution_notes" rows="3" required class="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500" placeholder="Detail the repairs performed, tests executed, lubrication added, etc."></textarea>
+            </div>
+            <button type="submit" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg shadow-sm flex items-center gap-2">
+                <i class="fa-solid fa-check"></i> Complete Repair (Log t_resolve)
+            </button>
+        </form>
+
+        {% elif ticket.status == 'RESOLVED' %}
+        <!-- Production Resumption Button -->
+        <div class="bg-emerald-50 border border-emerald-200 p-5 rounded-lg text-center mt-3">
+            <h3 class="font-bold text-emerald-900 text-base">Repair Finished! Ready to Resume Production</h3>
+            <p class="text-xs text-emerald-700 mt-1 mb-4">
+                Total Downtime (MTTR): <strong>{{ ticket.total_downtime_seconds|default:0 }} seconds</strong>.
+                When the operator restarts the CNC cutting cycle, click below (or telemetry will auto-detect RUNNING state):
+            </p>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="resume_production">
+                <button type="submit" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg shadow-sm inline-flex items-center gap-2">
+                    <i class="fa-solid fa-play"></i> Confirm Production Resumed (Log t_run)
+                </button>
+            </form>
+        </div>
+
+        {% elif ticket.status == 'CLOSED_RUNNING' %}
+        <div class="bg-green-50 border border-green-200 p-4 rounded-lg flex items-center justify-between text-green-900 mt-3">
+            <div>
+                <h4 class="font-bold text-sm">Ticket Successfully Completed & Closed</h4>
+                <p class="text-xs text-green-700">Machine resumed production on {{ ticket.next_run_time|date:"d-M-Y H:i" }}.</p>
+                {% if ticket.resolution_notes %}
+                <p class="text-xs text-slate-700 mt-1"><strong>Action:</strong> {{ ticket.resolution_notes }}</p>
+                {% endif %}
+            </div>
+            <span class="text-green-700 text-2xl"><i class="fa-solid fa-circle-check"></i></span>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Dynamic sub-category filter based on selected 4M category
+    const mainSelect = document.getElementById('main-category-select');
+    const subSelect = document.getElementById('sub-category-select');
+
+    if (mainSelect && subSelect) {
+        mainSelect.addEventListener('change', function() {
+            const selectedCat = this.value;
+            const options = subSelect.querySelectorAll('option');
+
+            options.forEach(opt => {
+                if (!opt.value) {
+                    opt.innerText = selectedCat ? "-- Select Sub-Category --" : "-- Select Main Category First --";
+                    opt.classList.remove('hidden');
+                } else if (opt.getAttribute('data-cat') === selectedCat) {
+                    opt.classList.remove('hidden');
+                } else {
+                    opt.classList.add('hidden');
+                }
+            });
+            subSelect.value = "";
+        });
+    }
+</script>
+{% endblock %}

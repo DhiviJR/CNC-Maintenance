@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>QR Sticker - {{ machine.machine_code }}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f4f6f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .sticker-card {
+            background: #ffffff;
+            width: 380px;
+            border: 3px solid #1E3A8A;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: #1E3A8A;
+            color: #ffffff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+        .header h2 {
+            margin: 0;
+            font-size: 16px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .header p {
+            margin: 2px 0 0;
+            font-size: 10px;
+            color: #93C5FD;
+        }
+        .machine-code {
+            font-size: 26px;
+            font-weight: 800;
+            color: #1E3A8A;
+            margin: 5px 0;
+            letter-spacing: 1.5px;
+        }
+        .machine-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 12px;
+        }
+        .qr-box {
+            border: 2px dashed #94A3B8;
+            border-radius: 8px;
+            padding: 10px;
+            display: inline-block;
+            background: #ffffff;
+            margin-bottom: 12px;
+        }
+        .qr-box img {
+            width: 220px;
+            height: 220px;
+            display: block;
+        }
+        .instructions {
+            background: #F1F5F9;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 11px;
+            color: #475569;
+            line-height: 1.4;
+            text-align: left;
+            margin-bottom: 12px;
+        }
+        .instructions strong {
+            color: #1E293B;
+        }
+        .footer-specs {
+            font-size: 10px;
+            color: #64748B;
+            border-top: 1px solid #E2E8F0;
+            padding-top: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .print-btn-bar {
+            margin-top: 15px;
+            text-align: center;
+        }
+        .print-btn {
+            background: #2563EB;
+            color: #ffffff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        @media print {
+            body {
+                background: none;
+                padding: 0;
+            }
+            .sticker-card {
+                border: 2px solid #000;
+                box-shadow: none;
+                width: 100%;
+                max-width: 350px;
+                page-break-inside: avoid;
+            }
+            .print-btn-bar {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div>
+        <div class="sticker-card">
+            <div class="header">
+                <h2>CNC Maintenance Point</h2>
+                <p>Digital Downtime Tracking System</p>
+            </div>
+
+            <div class="machine-code">{{ machine.machine_code }}</div>
+            <div class="machine-name">{{ machine.name }}</div>
+
+            <div class="qr-box">
+                {% if machine.qr_code_image %}
+                <img src="{{ machine.qr_code_image.url }}" alt="QR Code">
+                {% else %}
+                <p>QR Not Generated</p>
+                {% endif %}
+            </div>
+
+            <div class="instructions">
+                <strong>INSTRUCTIONS FOR TECHNICIAN:</strong><br>
+                1. On arrival, scan this QR with the mobile app.<br>
+                2. System verifies physical attendance (<em>t<sub>scan</sub></em>).<br>
+                3. Select 4M root-cause & log replaced spare parts.
+            </div>
+
+            <div class="footer-specs">
+                <span>Controller: {{ machine.controller_type }}</span>
+                <span>IP: {{ machine.ip_address }}</span>
+                <span>Loc: {{ machine.location }}</span>
+            </div>
+        </div>
+
+        <div class="print-btn-bar">
+            <button class="print-btn" onclick="window.print()">Print Machine Sticker</button>
+        </div>
+    </div>
+
+</body>
+</html>

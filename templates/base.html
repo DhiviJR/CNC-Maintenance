@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CNC Maintenance & Downtime Tracking{% endblock %}</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        },
+                        status: {
+                            running: '#10b981',
+                            idle: '#f59e0b',
+                            alarm: '#ef4444',
+                            emergency: '#b91c1c',
+                            maint: '#3b82f6',
+                            offline: '#6b7280'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col font-sans antialiased">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+            <!-- Brand -->
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-xl shadow">
+                    <i class="fa-solid fa-gears"></i>
+                </div>
+                <div>
+                    <a href="{% url 'dashboard' %}" class="text-lg font-bold tracking-tight text-white hover:text-blue-300">
+                        CNC Smart Maintenance
+                    </a>
+                    <p class="text-xs text-slate-400">TPM & Downtime Tracking System</p>
+                </div>
+            </div>
+
+            <!-- Nav Links -->
+            <nav class="hidden md:flex items-center space-x-1">
+                <a href="{% url 'dashboard' %}" class="px-3 py-2 rounded-md text-sm font-medium {% if request.resolver_match.url_name == 'dashboard' %}bg-blue-600 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
+                    <i class="fa-solid fa-chart-line mr-1.5"></i> Dashboard
+                </a>
+                <a href="{% url 'machine_list' %}" class="px-3 py-2 rounded-md text-sm font-medium {% if request.resolver_match.url_name == 'machine_list' %}bg-blue-600 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
+                    <i class="fa-solid fa-industry mr-1.5"></i> Fleet
+                </a>
+                <a href="{% url 'scanner' %}" class="px-3 py-2 rounded-md text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
+                    <i class="fa-solid fa-qrcode mr-1.5"></i> Scan QR
+                </a>
+                <a href="{% url 'ticket_list' %}" class="px-3 py-2 rounded-md text-sm font-medium {% if request.resolver_match.url_name == 'ticket_list' %}bg-blue-600 text-white{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
+                    <i class="fa-solid fa-wrench mr-1.5"></i> Tickets
+                </a>
+                <a href="{% url 'andon_board' %}" class="px-3 py-2 rounded-md text-sm font-medium text-amber-300 hover:bg-slate-800">
+                    <i class="fa-solid fa-tv mr-1.5"></i> Andon TV
+                </a>
+                <a href="{% url 'simulator' %}" class="px-3 py-2 rounded-md text-sm font-medium text-purple-300 hover:bg-slate-800">
+                    <i class="fa-solid fa-gamepad mr-1.5"></i> CNC Simulator
+                </a>
+                <a href="/admin/" target="_blank" class="px-3 py-2 rounded-md text-sm font-medium text-slate-300 hover:bg-slate-800">
+                    <i class="fa-solid fa-database mr-1.5"></i> Master Data
+                </a>
+            </nav>
+
+            <!-- Quick Status Badge -->
+            <div class="flex items-center space-x-3">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-900/80 text-emerald-300 border border-emerald-500/30">
+                    <span class="w-2 h-2 mr-1.5 rounded-full bg-emerald-400 animate-pulse"></span> FANUC FOCAS Live
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Flash Messages -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 w-full">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="p-4 mb-3 rounded-lg border shadow-sm flex items-center justify-between {% if message.tags == 'error' %}bg-red-50 border-red-200 text-red-800{% elif message.tags == 'warning' %}bg-amber-50 border-amber-200 text-amber-800{% else %}bg-emerald-50 border-emerald-200 text-emerald-800{% endif %}">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid {% if message.tags == 'error' %}fa-triangle-exclamation{% elif message.tags == 'warning' %}fa-circle-exclamation{% else %}fa-circle-check{% endif %}"></i>
+                        <span>{{ message }}</span>
+                    </div>
+                    <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-4 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center text-xs text-slate-500">
+            <div>
+                <strong>CNC Maintenance & Downtime Tracking System</strong> | 4M Root-Cause & FOCAS Integration
+            </div>
+            <div class="mt-2 md:mt-0 flex space-x-4">
+                <span>Database: MySQL 8.0</span>
+                <span>•</span>
+                <span>FOCAS DLL: Fwlib64.dll</span>
+                <span>•</span>
+                <span>Shift Timezone: Asia/Kolkata</span>
+            </div>
+        </div>
+    </footer>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
