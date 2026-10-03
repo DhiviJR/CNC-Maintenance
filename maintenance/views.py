@@ -398,6 +398,23 @@ def ticket_detail_view(request, ticket_id):
         elif action == 'complete_repair':
             res_notes = request.POST.get('resolution_notes', '')
             now = timezone.now()
+            machine = ticket.machine
+
+            # SAFETY CHECK: Poll live machine status via FOCAS if client available
+            try:
+                success, result = TelemetryCollector.poll_focas_machine(machine)
+                if success:
+                    machine.refresh_from_db()
+            except Exception:
+                pass
+
+            # Block completion if machine is STILL in ALARM or EMERGENCY_STOP
+            if machine.current_status in ['ALARM', 'EMERGENCY_STOP']:
+                messages.error(
+                    request,
+                    f"⚠️ CANNOT COMPLETE REPAIR! Machine {machine.machine_code} is still reporting an active '{machine.get_current_status_display()}' state from the CNC controller. Please check the machine, clear the physical alarm on the control panel, and try again."
+                )
+                return redirect('ticket_detail', ticket_id=ticket.id)
 
             ticket.resolution_notes = res_notes
             ticket.resolve_time = now
@@ -406,7 +423,6 @@ def ticket_detail_view(request, ticket_id):
             ticket.save()
 
             # Machine status updated to IDLE / Waiting for operator cycle start
-            machine = ticket.machine
             machine.current_status = 'IDLE'
             machine.save(update_fields=['current_status'])
 
