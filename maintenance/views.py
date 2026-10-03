@@ -168,7 +168,19 @@ def dashboard_view(request):
 
 def api_dashboard_data(request):
     """JSON API for real-time dashboard refresh & charts."""
-    machines = CNCMachine.objects.filter(is_active=True)
+    machines = CNCMachine.objects.filter(is_active=True).order_by('machine_code')
+    machine_list = []
+    for m in machines:
+        machine_list.append({
+            'machine_code': m.machine_code,
+            'name': m.name,
+            'location': m.location,
+            'ip_address': m.ip_address,
+            'current_status': m.current_status,
+            'status_display': m.get_current_status_display(),
+            'last_status_change': m.last_status_change.strftime("%Y-%m-%d %H:%M:%S") if m.last_status_change else ""
+        })
+
     status_counts = {
         'RUNNING': machines.filter(current_status='RUNNING').count(),
         'IDLE': machines.filter(current_status='IDLE').count(),
@@ -190,6 +202,7 @@ def api_dashboard_data(request):
 
     return JsonResponse({
         'status_counts': status_counts,
+        'machines': machine_list,
         'active_tickets': active_tickets,
         'server_time': timezone.now().strftime("%Y-%m-%d %H:%M:%S")
     })

@@ -17,9 +17,11 @@ class TelemetryCollector:
     def process_machine_telemetry(cls, machine: CNCMachine, decoded_data: dict):
         """
         Receives decoded FOCAS telemetry dictionary and applies business logic.
+        Ensures ALARM status persists while ticket is unattended (OPEN_ALARM),
+        and UNDER_MAINTENANCE persists while ticket is being attended/repaired.
         """
         raw = decoded_data.get('raw', {})
-        new_status = decoded_data.get('derived_status', 'OFFLINE')
+        raw_status = decoded_data.get('derived_status', 'OFFLINE')
         alarm_code = decoded_data.get('alarm_code')
         alarm_msg = decoded_data.get('alarm_msg')
 
@@ -28,6 +30,24 @@ class TelemetryCollector:
 
         # Update last polled time
         machine.last_polled_at = now
+
+        # Check for active breakdown ticket
+        active_ticket = BreakdownTicket.objects.filter(
+            machine=machine,
+            status__in=['OPEN_ALARM', 'ACKNOWLEDGED', 'UNDER_REPAIR']
+        ).first()
+
+        # Determine effective machine status based on ticket lifecycle:
+        # 1. Unattended ticket (OPEN_ALARM) -> Keep ALARM (blinking red on Andon TV)
+        # 2. Attended / In-repair ticket (ACKNOWLEDGED/UNDER_REPAIR) -> Keep UNDER_MAINTENANCE (orange/yellow)
+        # 3. No active ticket -> Follow raw telemetry (RUNNING, IDLE, OFFLINE)
+        if active_ticket:
+            if active_ticket.status == 'OPEN_ALARM':
+                new_status = 'ALARM' if raw_status not in ['ALARM', 'EMERGENCY_STOP'] else raw_status
+            elif active_ticket.status in ['ACKNOWLEDGED', 'UNDER_REPAIR']:
+                new_status = 'UNDER_MAINTENANCE'
+        else:
+            new_status = raw_status
 
         # Detect State Transition
         if previous_status != new_status:
@@ -56,41 +76,34 @@ class TelemetryCollector:
             machine.current_status = new_status
             machine.last_status_change = now
 
-            # Step 2: Trigger Alert on ALARM or EMERGENCY_STOP
-            if new_status in ['ALARM', 'EMERGENCY_STOP']:
-                # Determine trigger source
-                trigger = 'EMERGENCY' if new_status == 'EMERGENCY_STOP' else 'ALARM'
-                
-                # Check if there is already an active open/unresolved ticket
-                existing_ticket = BreakdownTicket.objects.filter(
+        # Step 2: Trigger Alert on ALARM or EMERGENCY_STOP if no active ticket exists
+        if raw_status in ['ALARM', 'EMERGENCY_STOP']:
+            if not active_ticket:
+                trigger = 'EMERGENCY' if raw_status == 'EMERGENCY_STOP' else 'ALARM'
+                BreakdownTicket.objects.create(
                     machine=machine,
-                    status__in=['OPEN_ALARM', 'ACKNOWLEDGED', 'UNDER_REPAIR']
-                ).first()
+                    trigger_source=trigger,
+                    status='OPEN_ALARM',
+                    alarm_time=now,
+                    focas_alarm_code=alarm_code or ("E-STOP ACTIVATED" if raw_status == 'EMERGENCY_STOP' else "FOCAS ALARM"),
+                    focas_alarm_msg=alarm_msg or ("Machine in Emergency Stop" if raw_status == 'EMERGENCY_STOP' else "CNC controller alarm bit set"),
+                )
+                logger.info(f"Triggered breakdown ticket for machine {machine.machine_code} at {now}")
+                machine.current_status = raw_status
+                machine.last_status_change = now
 
-                if not existing_ticket:
-                    BreakdownTicket.objects.create(
-                        machine=machine,
-                        trigger_source=trigger,
-                        status='OPEN_ALARM',
-                        alarm_time=now,
-                        focas_alarm_code=alarm_code or ("E-STOP ACTIVATED" if new_status == 'EMERGENCY_STOP' else "FOCAS ALARM"),
-                        focas_alarm_msg=alarm_msg or ("Machine in Emergency Stop" if new_status == 'EMERGENCY_STOP' else "CNC controller alarm bit set"),
-                    )
-                    logger.info(f"Triggered breakdown ticket for machine {machine.machine_code} at {now}")
+        # Step 3.g: Production Resumption - Next Run Time after Resolution
+        elif raw_status == 'RUNNING' and not active_ticket:
+            resolved_ticket = BreakdownTicket.objects.filter(
+                machine=machine,
+                status='RESOLVED'
+            ).order_by('-resolve_time').first()
 
-            # Step 3.g: Production Resumption - Next Run Time after Resolution
-            elif new_status == 'RUNNING':
-                # Find any recently resolved ticket waiting for next run time
-                resolved_ticket = BreakdownTicket.objects.filter(
-                    machine=machine,
-                    status='RESOLVED'
-                ).order_by('-resolve_time').first()
-
-                if resolved_ticket:
-                    resolved_ticket.next_run_time = now
-                    resolved_ticket.status = 'CLOSED_RUNNING'
-                    resolved_ticket.save()
-                    logger.info(f"Production resumed for ticket {resolved_ticket.ticket_number} (t_run: {now})")
+            if resolved_ticket:
+                resolved_ticket.next_run_time = now
+                resolved_ticket.status = 'CLOSED_RUNNING'
+                resolved_ticket.save()
+                logger.info(f"Production resumed for ticket {resolved_ticket.ticket_number} (t_run: {now})")
 
         machine.save()
         return machine
