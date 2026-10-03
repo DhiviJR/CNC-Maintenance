@@ -88,8 +88,8 @@
         <h3 class="font-bold text-amber-900 text-lg">On-Site QR Verification Required</h3>
         <p class="text-sm text-amber-700 mt-1">Technician must scan the physical QR code on the machine panel to log attendance.</p>
         <div class="mt-4 flex justify-center gap-3">
-            <a href="{% url 'scan_machine' ticket.machine.machine_code %}" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg shadow-sm flex items-center gap-2">
-                <i class="fa-solid fa-qrcode text-lg"></i> Verify QR Scan Now
+            <a href="{% url 'scanner' %}?target_machine={{ ticket.machine.machine_code }}&ticket_id={{ ticket.id }}" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg shadow-sm flex items-center gap-2">
+                <i class="fa-solid fa-camera text-lg"></i> Open Camera & Scan Machine QR Code
             </a>
         </div>
     </div>

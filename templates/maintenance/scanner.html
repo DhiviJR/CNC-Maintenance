@@ -13,24 +13,38 @@
     <!-- Header Card -->
     <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 text-center">
         <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3 text-xl shadow-sm">
-            <i class="fa-solid fa-qrcode"></i>
+            <i class="fa-solid fa-camera"></i>
         </div>
+        
+        {% if target_machine %}
+        <span class="inline-block px-3 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-xs font-bold uppercase tracking-wider mb-2">
+            Target Verification Required: {{ target_machine }}
+        </span>
+        <h1 class="text-xl font-bold text-slate-900">Physical QR Verification for {{ target_machine }}</h1>
+        <p class="text-xs text-slate-600 mt-1">
+            Point camera at the QR code affixed on physical machine <strong>{{ target_machine }}</strong> to log attendance time (<em>t<sub>scan</sub></em>).
+        </p>
+        {% else %}
         <h1 class="text-xl font-bold text-slate-900">Step 3.a & 3.b: Physical Machine QR Verification</h1>
         <p class="text-xs text-slate-500 mt-1">
             Point camera at the QR code affixed to the physical CNC machine to log attendance time (<em>t<sub>scan</sub></em>) and acknowledge the breakdown ticket.
         </p>
+        {% endif %}
     </div>
 
+    <!-- Dynamic Error / Success Alert Box -->
+    <div id="qr-error-box" class="hidden p-4 rounded-xl border shadow-sm text-sm font-semibold transition-all"></div>
+
     <!-- Live Camera Scanner Viewport -->
-    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <div id="qr-reader" class="w-full rounded-lg overflow-hidden border-2 border-dashed border-slate-300"></div>
+    <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+        <div id="qr-reader" class="w-full rounded-lg overflow-hidden border-2 border-dashed border-slate-300 bg-slate-50 min-h-[280px]"></div>
         <div id="qr-reader-results" class="mt-3 text-center text-sm font-semibold text-emerald-600"></div>
 
         <div class="flex justify-center gap-3 mt-4">
-            <button id="btn-start-scan" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg shadow-sm flex items-center gap-2">
+            <button id="btn-start-scan" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg shadow-sm flex items-center gap-2">
                 <i class="fa-solid fa-camera"></i> Start Camera Scanner
             </button>
-            <button id="btn-stop-scan" class="hidden px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white text-sm font-semibold rounded-lg shadow-sm flex items-center gap-2">
+            <button id="btn-stop-scan" class="hidden px-5 py-2.5 bg-slate-600 hover:bg-slate-700 text-white text-sm font-bold rounded-lg shadow-sm flex items-center gap-2">
                 <i class="fa-solid fa-stop"></i> Stop Camera
             </button>
         </div>
@@ -39,21 +53,39 @@
     <!-- Fallback / Desktop Quick Verification -->
     <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
         <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-2">
-            <i class="fa-solid fa-keyboard text-slate-500"></i> Manual Entry / Test Machine Scan
+            <i class="fa-solid fa-keyboard text-slate-500"></i> Manual Entry / Test Barcode Scan
         </h2>
-        <p class="text-xs text-slate-500 mb-4">If testing on a desktop or testing barcode without camera, select the machine below to simulate physical attendance:</p>
+        <p class="text-xs text-slate-500 mb-4">
+            {% if target_machine %}
+                Select the target machine <strong>{{ target_machine }}</strong> below to simulate barcode scan if testing without a camera:
+            {% else %}
+                Select a machine below to simulate scanning physical attendance:
+            {% endif %}
+        </p>
         
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {% for m in machines %}
-            <a href="{% url 'scan_machine' m.machine_code %}" class="flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 transition-colors group">
-                <div>
-                    <span class="font-bold text-sm text-slate-900 group-hover:text-emerald-700">{{ m.machine_code }}</span>
-                    <span class="block text-xs text-slate-500">{{ m.name }}</span>
+            {% if target_machine and m.machine_code != target_machine %}
+                <!-- Non-matching machine disabled when targeted -->
+                <div class="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50 opacity-40 cursor-not-allowed">
+                    <div>
+                        <span class="font-bold text-sm text-slate-400">{{ m.machine_code }}</span>
+                        <span class="block text-xs text-slate-400">{{ m.name }}</span>
+                    </div>
+                    <span class="text-[10px] text-red-600 font-bold">Wrong Target</span>
                 </div>
-                <span class="text-xs px-2 py-1 rounded font-semibold {% if m.current_status == 'ALARM' or m.current_status == 'EMERGENCY_STOP' %}bg-red-100 text-red-700 animate-pulse{% elif m.current_status == 'RUNNING' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-700{% endif %}">
-                    {{ m.get_current_status_display }}
-                </span>
-            </a>
+            {% else %}
+                <!-- Target or General Match -->
+                <a href="{% url 'scan_machine' m.machine_code %}{% if ticket_id %}?ticket_id={{ ticket_id }}{% endif %}" class="flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50 transition-colors group">
+                    <div>
+                        <span class="font-bold text-sm text-slate-900 group-hover:text-emerald-700">{{ m.machine_code }}</span>
+                        <span class="block text-xs text-slate-500">{{ m.name }}</span>
+                    </div>
+                    <span class="text-xs px-2 py-1 rounded font-semibold {% if m.current_status == 'ALARM' or m.current_status == 'EMERGENCY_STOP' %}bg-red-100 text-red-700 animate-pulse{% elif m.current_status == 'RUNNING' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-100 text-slate-700{% endif %}">
+                        {{ m.get_current_status_display }}
+                    </span>
+                </a>
+            {% endif %}
             {% endfor %}
         </div>
     </div>
@@ -64,33 +96,84 @@
 {% block extra_scripts %}
 <script>
     let html5QrCode = null;
+    const targetMachine = "{{ target_machine|escapejs }}";
+    const ticketId = "{{ ticket_id|escapejs }}";
+    const errorBox = document.getElementById('qr-error-box');
+
+    function showError(msg) {
+        errorBox.className = "p-4 rounded-xl border border-red-300 bg-red-50 text-red-800 shadow-sm text-sm font-semibold flex items-center justify-between";
+        errorBox.innerHTML = `
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-triangle-exclamation text-red-600 text-lg"></i>
+                <span>${msg}</span>
+            </div>
+            <button onclick="this.parentElement.classList.add('hidden')" class="text-red-500 font-bold">&times;</button>
+        `;
+        errorBox.classList.remove('hidden');
+        playErrorBeep();
+    }
+
+    function showSuccess(msg) {
+        errorBox.className = "p-4 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 shadow-sm text-sm font-semibold flex items-center gap-2";
+        errorBox.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-600 text-lg"></i> <span>${msg}</span>`;
+        errorBox.classList.remove('hidden');
+    }
+
+    function playErrorBeep() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(300, ctx.currentTime);
+            osc.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.4);
+        } catch(e) {}
+    }
 
     function onScanSuccess(decodedText, decodedResult) {
         console.log(`Code matched = ${decodedText}`, decodedResult);
-        document.getElementById('qr-reader-results').innerText = `Scanned: ${decodedText}. Verifying attendance...`;
 
-        // Stop scanning
+        // Expected format: "CNC_MACHINE:CNC-01" or "CNC-01"
+        let scannedCode = decodedText.trim();
+        if (scannedCode.startsWith("CNC_MACHINE:")) {
+            scannedCode = scannedCode.replace("CNC_MACHINE:", "").trim();
+        }
+
+        // VERIFY TARGET MATCH IF TARGET IS SPECIFIED
+        if (targetMachine && scannedCode.toUpperCase() !== targetMachine.toUpperCase()) {
+            showError(`❌ QR CODE MISMATCH! You scanned machine '<strong>${scannedCode}</strong>', but this ticket is for machine '<strong>${targetMachine}</strong>'. Please scan the correct QR code on machine ${targetMachine}.`);
+            document.getElementById('qr-reader-results').innerText = `Scanned ${scannedCode} (Invalid Target)`;
+            return; // KEEP CAMERA RUNNING FOR RE-SCAN!
+        }
+
+        // MATCH SUCCESS!
+        showSuccess(`✔ Valid QR Code Verified for ${scannedCode}! Logging attendance...`);
+        document.getElementById('qr-reader-results').innerText = `Scanned: ${scannedCode}. Processing...`;
+
+        // Stop scanning and redirect
         if (html5QrCode) {
             html5QrCode.stop().then(() => {
-                redirectScan(decodedText);
+                redirectScan(scannedCode);
             }).catch(err => {
-                redirectScan(decodedText);
+                redirectScan(scannedCode);
             });
         } else {
-            redirectScan(decodedText);
+            redirectScan(scannedCode);
         }
     }
 
-    function redirectScan(text) {
-        // Expected format: "CNC_MACHINE:CNC-01" or "CNC-01"
-        let machineCode = text;
-        if (text.startsWith("CNC_MACHINE:")) {
-            machineCode = text.replace("CNC_MACHINE:", "");
+    function redirectScan(code) {
+        let url = `/scan/${encodeURIComponent(code)}/`;
+        if (ticketId) {
+            url += `?ticket_id=${encodeURIComponent(ticketId)}`;
         }
-        window.location.href = `/scan/${encodeURIComponent(machineCode)}/`;
+        window.location.href = url;
     }
 
-    document.getElementById('btn-start-scan').addEventListener('click', function() {
+    function startCamera() {
+        if (html5QrCode) return;
+
         html5QrCode = new Html5Qrcode("qr-reader");
         const config = { fps: 10, qrbox: { width: 250, height: 250 } };
         
@@ -101,17 +184,27 @@
             })
             .catch(err => {
                 console.error("Camera start error:", err);
-                alert("Camera permission denied or camera not found on device.");
+                showError("Could not access device camera. Please allow camera permissions or click start camera button.");
             });
-    });
+    }
+
+    document.getElementById('btn-start-scan').addEventListener('click', startCamera);
 
     document.getElementById('btn-stop-scan').addEventListener('click', function() {
         if (html5QrCode) {
             html5QrCode.stop().then(() => {
+                html5QrCode = null;
                 document.getElementById('btn-start-scan').classList.remove('hidden');
                 document.getElementById('btn-stop-scan').classList.add('hidden');
             });
         }
     });
+
+    // Auto-start camera if targeted verification
+    if (targetMachine) {
+        window.addEventListener('load', () => {
+            setTimeout(startCamera, 300);
+        });
+    }
 </script>
 {% endblock %}

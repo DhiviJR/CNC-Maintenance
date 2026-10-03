@@ -232,26 +232,59 @@ def qr_print_view(request, machine_code):
 
 def scanner_view(request):
     """
-    Mobile-optimized camera scanner page.
-    Technician points phone/tablet camera at QR code on physical CNC machine.
+    Mobile & device camera QR scanner page.
+    Supports general scanning or targeted verification for a specific machine / ticket.
     """
     machines = CNCMachine.objects.filter(is_active=True).order_by('machine_code')
-    return render(request, 'maintenance/scanner.html', {'machines': machines})
+    target_machine = request.GET.get('target_machine', '')
+    ticket_id = request.GET.get('ticket_id', '')
+
+    target_obj = None
+    target_ticket = None
+
+    if target_machine:
+        target_obj = CNCMachine.objects.filter(machine_code=target_machine).first()
+    if ticket_id:
+        target_ticket = BreakdownTicket.objects.filter(id=ticket_id).first()
+
+    return render(request, 'maintenance/scanner.html', {
+        'machines': machines,
+        'target_machine': target_machine,
+        'target_obj': target_obj,
+        'target_ticket': target_ticket,
+        'ticket_id': ticket_id,
+    })
 
 
 def scan_machine_action(request, machine_code):
     """
-    Step 3.a & 3.b: Triggered when technician scans QR code on CNC machine.
+    Step 3.a & 3.b: Triggered when QR code on CNC machine is verified via camera scan.
     Logs scan time (t_scan), records attendance, and transitions ticket to ACKNOWLEDGED.
     """
     machine = get_object_or_404(CNCMachine, machine_code=machine_code)
     now = timezone.now()
+    ticket_id = request.GET.get('ticket_id')
 
-    # Look for active breakdown ticket
-    open_ticket = BreakdownTicket.objects.filter(
-        machine=machine,
-        status='OPEN_ALARM'
-    ).order_by('-alarm_time').first()
+    # If ticket_id was specified, validate that ticket belongs to this machine
+    if ticket_id:
+        target_ticket = BreakdownTicket.objects.filter(id=ticket_id).first()
+        if target_ticket and target_ticket.machine.machine_code != machine_code:
+            messages.error(
+                request,
+                f"❌ Invalid QR Code Mismatch! Scanned QR for machine '{machine_code}', but ticket {target_ticket.ticket_number} is for machine '{target_ticket.machine.machine_code}'."
+            )
+            return redirect(f"/scanner/?target_machine={target_ticket.machine.machine_code}&ticket_id={target_ticket.id}")
+
+    # Look for active breakdown ticket (either specified or open)
+    open_ticket = None
+    if ticket_id:
+        open_ticket = BreakdownTicket.objects.filter(id=ticket_id, machine=machine, status='OPEN_ALARM').first()
+    
+    if not open_ticket:
+        open_ticket = BreakdownTicket.objects.filter(
+            machine=machine,
+            status='OPEN_ALARM'
+        ).order_by('-alarm_time').first()
 
     if open_ticket:
         # Step 3.b: Log time of scan (t_scan)
@@ -260,7 +293,6 @@ def scan_machine_action(request, machine_code):
         if request.user.is_authenticated:
             open_ticket.technician = request.user
         else:
-            # Fallback to default technician if unauthenticated
             default_tech = User.objects.filter(username='tech_john').first() or User.objects.first()
             open_ticket.technician = default_tech
 
