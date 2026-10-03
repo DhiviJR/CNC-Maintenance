@@ -44,6 +44,7 @@ class FocasDecoder:
         rich dictionary of decoded parameters and the unified machine status.
         """
         if hasattr(odbst, 'aut'):
+            tmmode_val = int(getattr(odbst, 'tmmode', 0))
             aut_val = int(odbst.aut)
             run_val = int(odbst.run)
             motion_val = int(odbst.motion)
@@ -52,6 +53,7 @@ class FocasDecoder:
             alarm_val = int(odbst.alarm)
             edit_val = int(odbst.edit)
         else:
+            tmmode_val = int(odbst.get('tmmode', 0))
             aut_val = int(odbst.get('aut', 0))
             run_val = int(odbst.get('run', 0))
             motion_val = int(odbst.get('motion', 0))
@@ -67,7 +69,9 @@ class FocasDecoder:
         elif alarm_val != 0:
             derived_status = 'ALARM'
             status_text = 'CNC Alarm Active'
-        elif run_val == 2 or motion_val == 1:
+        elif run_val in [2, 3, 4] or motion_val in [1, 2]:
+            # run_val: 2=START (cycle active), 3=MSTR (macro running), 4=RESTART
+            # motion_val: 1=MOTION (axes moving), 2=DWELL (G04 program dwell)
             derived_status = 'RUNNING'
             status_text = 'Machining / Cycle Running'
         else:
@@ -76,6 +80,7 @@ class FocasDecoder:
 
         return {
             'raw': {
+                'tmmode': tmmode_val,
                 'aut': aut_val,
                 'run': run_val,
                 'motion': motion_val,

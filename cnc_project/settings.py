@@ -76,7 +76,7 @@ WSGI_APPLICATION = 'cnc_project.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'cnc_maintenance_db',
+        'NAME': 'cnc_maintenance_db_test1',
         'USER': 'root',
         'PASSWORD': 'root',
         'HOST': '127.0.0.1',

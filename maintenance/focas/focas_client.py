@@ -10,16 +10,18 @@ DEFAULT_FOCAS_PATH = r"C:\Users\LENOVO\Downloads\fanuc-cnc-api-main\fanuc-cnc-ap
 class ODBST(Structure):
     """
     FANUC FOCAS CNC status structure.
+    Exact mapping for Series 15i/16i/18i/21i/0i/30i/31i/32i controllers.
     """
     _fields_ = [
-        ("dummy", c_short),
-        ("aut", c_short),        # Auto/Manual mode
-        ("run", c_short),        # Run status (0:STOP, 1:HOLD, 2:STaRT, 3:MSTR)
-        ("motion", c_short),     # Axis motion status (0:Stop, 1:Motion, 2:Dwell)
-        ("mstb", c_short),       # M, S, T, B function execution status
-        ("emergency", c_short),  # Emergency stop flag (0:Normal, 1:Emergency)
-        ("alarm", c_short),      # Alarm flag (0:Normal, 1:Alarm active)
-        ("edit", c_short),       # Program edit status
+        ("dummy", c_short),      # dummy
+        ("tmmode", c_short),     # T/M mode (0:T series, 1:M series)
+        ("aut", c_short),        # Selected automatic mode
+        ("run", c_short),        # Running status (0:STOP, 1:HOLD, 2:STaRT, 3:MSTR, 4:RESTART)
+        ("motion", c_short),     # Axis, dwell status (0:Stop, 1:Motion, 2:Dwell)
+        ("mstb", c_short),       # M, S, T, B status (0:Inactive, 1:Executing)
+        ("emergency", c_short),  # Emergency stop status (0:Normal, 1:Emergency)
+        ("alarm", c_short),      # Alarm status (0:Normal, 1:Alarm active)
+        ("edit", c_short),       # Editing status
     ]
 
 

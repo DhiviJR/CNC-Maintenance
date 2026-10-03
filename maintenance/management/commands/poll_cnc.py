@@ -51,7 +51,10 @@ class Command(BaseCommand):
                     else:
                         success, res = TelemetryCollector.poll_focas_machine(m)
                         if success:
-                            self.stdout.write(self.style.SUCCESS(f"[{m.machine_code}] FOCAS Read OK: {res['derived_status']}"))
+                            raw = res.get('raw', {})
+                            self.stdout.write(self.style.SUCCESS(
+                                f"[{m.machine_code}] FOCAS Read OK: {res['derived_status']} | Mode: {res['aut_mode_name']} | Run: {res['run_status_name']} | Motion: {res['motion_status_name']} (aut={raw.get('aut')}, run={raw.get('run')}, motion={raw.get('motion')}, emg={raw.get('emergency')}, alm={raw.get('alarm')})"
+                            ))
                         else:
                             self.stdout.write(self.style.ERROR(f"[{m.machine_code}] FOCAS Read Failed: {res}"))
 

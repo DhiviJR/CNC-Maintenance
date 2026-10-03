@@ -9,6 +9,7 @@ class CNCSimulator:
 
     PRESETS = {
         'RUNNING': {
+            'tmmode': 1,
             'aut': 1,        # MEM
             'run': 2,        # START
             'motion': 1,     # Motion
