@@ -21,6 +21,7 @@ urlpatterns = [
 
     # 4. Industrial Additions: Andon Board & Interactive Simulator
     path('andon/', views.andon_board_view, name='andon_board'),
+    path('preventive-maintenance/', views.preventive_maintenance_view, name='preventive_maintenance'),
     path('simulator/', views.simulator_view, name='simulator'),
     path('api/simulate/', views.api_simulate_action, name='api_simulate_action'),
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Factory Andon TV Board | CNC Maintenance</title>
+    <title>Maintenance Dashboard | CNC Maintenance</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -25,7 +25,7 @@
                 <i class="fa-solid fa-industry"></i>
             </div>
             <div>
-                <h1 class="text-3xl font-extrabold tracking-wide uppercase text-white">CNC SHOP FLOOR ANDON BOARD</h1>
+                <h1 class="text-3xl font-extrabold tracking-wide uppercase text-white">Maintenance Dashboard</h1>
                 <p class="text-xs text-slate-400">Live Machine Telemetry & Active Breakdown Escalation</p>
             </div>
         </div>
@@ -56,16 +56,46 @@
             </div>
             <div class="text-right">
                 <span class="text-2xl font-black bg-black/40 px-4 py-1.5 rounded-lg border border-red-400/50">
-                    {{ active_alarms|length }} MACHINE(S) DOWN
+                    <span id="active-alarm-count">{{ active_alarms|length }}</span> MACHINE(S) DOWN
                 </span>
             </div>
         </div>
     </div>
 
+    <!-- Machine filters -->
+    <section class="mb-6 flex flex-wrap items-end gap-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <div class="flex flex-col gap-1">
+            <label for="line-filter" class="text-xs font-bold uppercase tracking-wide text-slate-400">Line</label>
+            <select id="line-filter" class="min-w-52 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">
+                <option value="">All Lines</option>
+                {% for line in lines %}
+                    <option value="{{ line|default:'__unassigned__' }}">{{ line|default:'Unassigned' }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex flex-col gap-1">
+            <label for="machine-filter" class="text-xs font-bold uppercase tracking-wide text-slate-400">Machine</label>
+            <select id="machine-filter" class="min-w-52 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">
+                <option value="">All Machines</option>
+                {% for m in machines %}
+                    <option value="{{ m.machine_code }}" data-line="{{ m.line_name|default:'__unassigned__' }}">{{ m.machine_code }} — {{ m.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex flex-col gap-1">
+            <label for="machine-scope" class="text-xs font-bold uppercase tracking-wide text-slate-400">Show</label>
+            <select id="machine-scope" class="min-w-52 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">
+                <option value="breakdowns" selected>Breakdown machines</option>
+                <option value="all">All machines</option>
+            </select>
+        </div>
+        <button id="clear-filters" type="button" class="rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800">Clear filters</button>
+    </section>
+
     <!-- Machine Fleet Status Cards Grid -->
     <main class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 flex-grow">
         {% for m in machines %}
-        <div id="card-{{ m.machine_code }}" class="rounded-2xl p-5 border flex flex-col justify-between transition-all duration-300
+        <div id="card-{{ m.machine_code }}" data-machine-code="{{ m.machine_code }}" data-line="{{ m.line_name|default:'__unassigned__' }}" data-breakdown="{% if m.machine_code in breakdown_machine_codes %}true{% else %}false{% endif %}" class="{% if m.machine_code not in breakdown_machine_codes %}hidden {% endif %}rounded-2xl p-5 border flex flex-col justify-between transition-all duration-300
             {% if m.current_status == 'RUNNING' %}bg-slate-900/90 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.15)]
             {% elif m.current_status == 'IDLE' %}bg-slate-900/90 border-slate-700 shadow-none
             {% elif m.current_status == 'ALARM' or m.current_status == 'EMERGENCY_STOP' %}alarm-flash border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.5)]
@@ -103,8 +133,12 @@
                     <span id="duration-{{ m.machine_code }}" class="font-bold text-slate-200">{{ m.last_status_change|timesince }}</span>
                 </div>
             </div>
+            <a href="{% url 'preventive_maintenance' %}" class="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-500">
+                <i class="fa-solid fa-screwdriver-wrench"></i> Preventive Maintenance
+            </a>
         </div>
         {% endfor %}
+        <div id="no-machines-message" class="hidden col-span-full py-10 text-center text-sm text-slate-400">No machines match these filters.</div>
     </main>
 
     <!-- Footer Stats Bar -->
@@ -160,11 +194,73 @@
             } catch(e) {}
         }
 
+        // Machine filters
+        const lineFilter = document.getElementById('line-filter');
+        const machineFilter = document.getElementById('machine-filter');
+        const machineScope = document.getElementById('machine-scope');
+        const clearFilters = document.getElementById('clear-filters');
+        let latestBoardData = { active_tickets: [] };
+
+        function applyBoardFilters() {
+            const selectedLine = lineFilter.value;
+            const selectedMachine = machineFilter.value;
+            const breakdownCodes = latestBoardData.machines
+                ? new Set(latestBoardData.machines
+                    .filter(machine => ['ALARM', 'EMERGENCY_STOP', 'UNDER_MAINTENANCE'].includes(machine.current_status))
+                    .map(machine => machine.machine_code))
+                : new Set(Array.from(document.querySelectorAll('[data-breakdown="true"]'))
+                    .map(card => card.dataset.machineCode));
+            (latestBoardData.active_tickets || []).forEach(ticket => breakdownCodes.add(ticket.machine__machine_code));
+            let visibleCardCount = 0;
+
+            document.querySelectorAll('[data-machine-code]').forEach(card => {
+                const matchesLine = !selectedLine || card.dataset.line === selectedLine;
+                const matchesMachine = !selectedMachine || card.dataset.machineCode === selectedMachine;
+                const matchesScope = machineScope.value === 'all' || breakdownCodes.has(card.dataset.machineCode);
+                const isVisible = matchesLine && matchesMachine && matchesScope;
+                card.classList.toggle('hidden', !isVisible);
+                if (isVisible) visibleCardCount += 1;
+            });
+            document.getElementById('no-machines-message').classList.toggle('hidden', visibleCardCount > 0);
+
+            const visibleAlarms = (latestBoardData.active_tickets || []).filter(ticket => {
+                const matchesMachine = !selectedMachine || ticket.machine__machine_code === selectedMachine;
+                const ticketLine = ticket.machine__location || '__unassigned__';
+                const matchesLine = !selectedLine || ticketLine === selectedLine;
+                return matchesMachine && matchesLine;
+            });
+            document.getElementById('active-alarm-count').innerText = visibleAlarms.length;
+            document.getElementById('alarm-banner').classList.toggle('hidden', visibleAlarms.length === 0);
+        }
+
+        function updateMachineOptions() {
+            const selectedLine = lineFilter.value;
+            Array.from(machineFilter.options).forEach(option => {
+                if (!option.value) return;
+                option.hidden = Boolean(selectedLine && option.dataset.line !== selectedLine);
+            });
+            const selectedOption = machineFilter.selectedOptions[0];
+            if (selectedOption && selectedOption.hidden) machineFilter.value = '';
+            applyBoardFilters();
+        }
+
+        lineFilter.addEventListener('change', updateMachineOptions);
+        machineFilter.addEventListener('change', applyBoardFilters);
+        machineScope.addEventListener('change', applyBoardFilters);
+        clearFilters.addEventListener('click', () => {
+            lineFilter.value = '';
+            machineFilter.value = '';
+            machineScope.value = 'breakdowns';
+            updateMachineOptions();
+        });
+        applyBoardFilters();
+
         // Live Poll Telemetry
-        setInterval(() => {
+        function refreshBoard() {
             fetch("{% url 'api_dashboard_data' %}")
                 .then(r => r.json())
                 .then(data => {
+                    latestBoardData = data;
                     // Update Alarm Banner
                     const alarms = data.active_tickets || [];
                     const banner = document.getElementById('alarm-banner');
@@ -205,9 +301,12 @@
                             }
                         });
                     }
+                    applyBoardFilters();
                 })
                 .catch(e => console.error(e));
-        }, 4000);
+        }
+        refreshBoard();
+        setInterval(refreshBoard, 4000);
     </script>
 </body>
 </html>

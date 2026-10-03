@@ -13,9 +13,10 @@ from .models import (
 
 @admin.register(CNCMachine)
 class CNCMachineAdmin(admin.ModelAdmin):
-    list_display = ('machine_code', 'name', 'model_number', 'ip_address', 'port', 'status_badge', 'qr_preview', 'is_active', 'last_polled_at')
-    list_filter = ('current_status', 'is_active', 'controller_type')
-    search_fields = ('machine_code', 'name', 'ip_address', 'location')
+    fields = ('line_name', 'service_frequency', 'last_service_date', 'machine_code', 'name', 'model_number', 'controller_type', 'ip_address', 'port', 'timeout', 'location', 'current_status', 'qr_code_image', 'is_active')
+    list_display = ('line_name', 'service_frequency', 'last_service_date', 'machine_code', 'name', 'model_number', 'ip_address', 'port', 'status_badge', 'qr_preview', 'is_active', 'last_polled_at')
+    list_filter = ('line_name', 'service_frequency', 'current_status', 'is_active', 'controller_type')
+    search_fields = ('line_name', 'machine_code', 'name', 'ip_address', 'location')
     readonly_fields = ('current_status', 'last_status_change', 'last_polled_at', 'qr_preview_large', 'created_at', 'updated_at')
     actions = ['sync_focas_status']
 

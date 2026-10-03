@@ -8,6 +8,11 @@ import qrcode
 
 
 class CNCMachine(models.Model):
+    SERVICE_FREQUENCY_CHOICES = [
+        (month, f"{month} month" if month == 1 else f"{month} months")
+        for month in range(1, 13)
+    ]
+
     STATUS_CHOICES = [
         ('RUNNING', 'Running'),
         ('IDLE', 'Idle'),
@@ -17,6 +22,13 @@ class CNCMachine(models.Model):
         ('OFFLINE', 'Offline'),
     ]
 
+    line_name = models.CharField(max_length=100, default="", verbose_name="Line Name")
+    service_frequency = models.PositiveSmallIntegerField(
+        choices=SERVICE_FREQUENCY_CHOICES,
+        default=1,
+        verbose_name="Service Frequency (Months)",
+    )
+    last_service_date = models.DateField(blank=True, null=True, verbose_name="Last Service Date")
     machine_code = models.CharField(max_length=50, primary_key=True, help_text="Unique Machine Identifier (e.g. CNC-01)")
     name = models.CharField(max_length=100, help_text="Machine name (e.g. Fanuc Robodrill Alpha)")
     model_number = models.CharField(max_length=100, blank=True, null=True)

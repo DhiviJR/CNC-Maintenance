@@ -92,7 +92,7 @@
                     </a>
 
                     <a href="{% url 'machine_list' %}" class="flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors {% if request.resolver_match.url_name == 'machine_list' or request.resolver_match.url_name == 'machine_detail' %}bg-blue-600 text-white shadow-sm{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
-                        <i class="fa-solid fa-industry w-6 text-center text-base mr-2"></i> Machine Fleet
+                        <i class="fa-solid fa-industry w-6 text-center text-base mr-2"></i> CNC Machines
                     </a>
 
                     <a href="{% url 'scanner' %}" class="flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-colors">
@@ -100,24 +100,30 @@
                     </a>
 
                     <a href="{% url 'ticket_list' %}" class="flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors {% if request.resolver_match.url_name == 'ticket_list' or request.resolver_match.url_name == 'ticket_detail' %}bg-blue-600 text-white shadow-sm{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
-                        <i class="fa-solid fa-wrench w-6 text-center text-base mr-2"></i> Tickets & Repairs
+                        <i class="fa-solid fa-wrench w-6 text-center text-base mr-2"></i> Breakdown
                     </a>
                 </div>
             </div>
 
             <!-- Group 2: Monitoring & Shop Floor -->
+            {% if request.user.username == 'Maintenance' or request.user.username == 'Developer' %}
             <div>
-                <span class="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Monitoring & TV</span>
+                <span class="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Monitoring</span>
                 <div class="mt-2 space-y-1">
-                    <a href="{% url 'andon_board' %}" class="flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors text-amber-300 hover:bg-slate-800 hover:text-amber-200">
-                        <i class="fa-solid fa-tv w-6 text-center text-base mr-2"></i> Andon TV Display
-                    </a>
+                    {% if request.user.username == 'Maintenance' or request.user.username == 'Developer' %}
+                        <a href="{% url 'andon_board' %}" class="flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors text-amber-300 hover:bg-slate-800 hover:text-amber-200">
+                            <i class="fa-solid fa-tv w-6 text-center text-base mr-2"></i> Maintenance Dashboard
+                        </a>
+                    {% endif %}
 
+                    {% if request.user.username == 'Developer' %}
                     <a href="{% url 'simulator' %}" class="flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors text-purple-300 hover:bg-slate-800 hover:text-purple-200">
                         <i class="fa-solid fa-gamepad w-6 text-center text-base mr-2"></i> CNC Simulator
                     </a>
+                    {% endif %}
                 </div>
             </div>
+            {% endif %}
 
             <!-- Group 3: Master Data & Admin -->
             <div>
@@ -126,6 +132,12 @@
                     <a href="/admin/" target="_blank" class="flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors text-slate-400 hover:bg-slate-800 hover:text-white">
                         <i class="fa-solid fa-database w-6 text-center text-base mr-2"></i> Master Data Admin
                     </a>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="w-full text-left flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors text-slate-400 hover:bg-slate-800 hover:text-white">
+                            <i class="fa-solid fa-right-from-bracket w-6 text-center text-base mr-2"></i> Logout ({{ request.user.username }})
+                        </button>
+                    </form>
                 </div>
             </div>
 

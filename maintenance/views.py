@@ -1,14 +1,19 @@
 import json
+import calendar
 from decimal import Decimal
-from datetime import timedelta
+from datetime import date, timedelta
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
+from django.contrib.auth import login, logout
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.db.models import Count, Sum, Avg, Q, F, Min, Max
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.urls import reverse
+from urllib.parse import urlencode
 
 from .models import (
     CNCMachine,
@@ -21,6 +26,7 @@ from .models import (
 )
 from .focas.simulator import CNCSimulator
 from .focas.collector import TelemetryCollector
+from .Backend.login_config import LOGIN_CREDENTIALS
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -28,6 +34,51 @@ from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+
+
+##############################################################################
+# Function Name : login_page
+#
+# Parameters    : request - The current web request.
+#
+# Note          : Checks the configured credentials and opens the home page.
+##############################################################################
+def login_page(request):
+    """Authenticate one of the configured application users."""
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+
+    error = ''
+    if request.method == 'POST':
+        username = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '')
+
+        if LOGIN_CREDENTIALS.get(username) == password:
+            user, _ = User.objects.get_or_create(username=username)
+            user.is_active = True
+            user.is_staff = username == 'admin'
+            user.is_superuser = username == 'admin'
+            user.set_password(password)
+            user.save()
+            login(request, user)
+            return redirect('dashboard')
+
+        error = 'Username or password is incorrect.'
+
+    return render(request, 'Login/login.html', {'error': error})
+
+
+##############################################################################
+# Function Name : logout_page
+#
+# Parameters    : request - The current web request.
+#
+# Note          : Signs out the current user and returns to the login page.
+##############################################################################
+def logout_page(request):
+    if request.method == 'POST':
+        logout(request)
+    return redirect('login')
 
 
 # ==============================================================================
@@ -193,9 +244,9 @@ def api_dashboard_data(request):
     active_tickets = list(BreakdownTicket.objects.filter(
         status__in=['OPEN_ALARM', 'ACKNOWLEDGED', 'UNDER_REPAIR']
     ).values(
-        'ticket_number', 'machine__machine_code', 'status', 'trigger_source',
+        'ticket_number', 'machine__machine_code', 'machine__location', 'status', 'trigger_source',
         'focas_alarm_code', 'alarm_time'
-    )[:10])
+    ))
 
     for t in active_tickets:
         t['alarm_time'] = t['alarm_time'].strftime("%Y-%m-%d %H:%M:%S")
@@ -215,7 +266,17 @@ def api_dashboard_data(request):
 def machine_list_view(request):
     """Overview of all machines in the fleet with live status badges."""
     machines = CNCMachine.objects.filter(is_active=True).order_by('machine_code')
-    return render(request, 'maintenance/machine_list.html', {'machines': machines})
+    lines = CNCMachine.objects.filter(is_active=True).values_list('line_name', flat=True).distinct().order_by('line_name')
+    selected_line = request.GET.get('line', '')
+    if selected_line == '__unassigned__':
+        machines = machines.filter(line_name='')
+    elif selected_line:
+        machines = machines.filter(line_name=selected_line)
+    return render(request, 'maintenance/machine_list.html', {
+        'machines': machines,
+        'lines': lines,
+        'selected_line': selected_line,
+    })
 
 
 def machine_detail_view(request, machine_code):
@@ -532,12 +593,112 @@ def andon_board_view(request):
     Shows real-time machine status blocks, flashing active alarms, and elapsed times.
     """
     machines = CNCMachine.objects.filter(is_active=True).order_by('machine_code')
+    lines = machines.values_list('line_name', flat=True).distinct().order_by('line_name')
     active_alarms = BreakdownTicket.objects.filter(
         status__in=['OPEN_ALARM', 'ACKNOWLEDGED', 'UNDER_REPAIR']
     ).select_related('machine', 'technician').order_by('-alarm_time')
+    breakdown_machine_codes = set(
+        machines.filter(
+            Q(current_status__in=['ALARM', 'EMERGENCY_STOP', 'UNDER_MAINTENANCE']) |
+            Q(tickets__status__in=['OPEN_ALARM', 'ACKNOWLEDGED', 'UNDER_REPAIR'])
+        ).values_list('machine_code', flat=True).distinct()
+    )
     return render(request, 'maintenance/andon.html', {
         'machines': machines,
+        'lines': lines,
+        'breakdown_machine_codes': breakdown_machine_codes,
         'active_alarms': active_alarms
+    })
+
+
+##############################################################################
+# Function Name : add_months
+#
+# Parameters    : service_date - The date of the last completed service.
+#                 months - Number of months until the next service.
+#
+# Note          : Adds months and keeps the date inside the target month.
+##############################################################################
+def add_months(service_date, months):
+    month_index = service_date.month - 1 + months
+    year = service_date.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(service_date.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+##############################################################################
+# Function Name : preventive_maintenance_view
+#
+# Parameters    : request - The current web request.
+#
+# Note          : Shows service dates and lets staff record completed service.
+##############################################################################
+def preventive_maintenance_view(request):
+    line_filter = request.GET.get('line', '')
+
+    if request.method == 'POST':
+        machine = get_object_or_404(
+            CNCMachine,
+            machine_code=request.POST.get('machine_code'),
+            is_active=True,
+        )
+        service_date = parse_date(request.POST.get('last_service_date', ''))
+        if service_date:
+            machine.last_service_date = service_date
+            machine.save(update_fields=['last_service_date', 'updated_at'])
+            messages.success(request, f"Last service date saved for {machine.machine_code}.")
+        else:
+            messages.error(request, "Enter a valid last service date.")
+
+        line_filter = request.POST.get('line', '')
+        query = urlencode({'line': line_filter}) if line_filter else ''
+        return redirect(f"{reverse('preventive_maintenance')}?{query}" if query else 'preventive_maintenance')
+
+    all_machines = CNCMachine.objects.filter(is_active=True).order_by('line_name', 'machine_code')
+    lines = all_machines.values_list('line_name', flat=True).distinct().order_by('line_name')
+    machines = all_machines
+    if line_filter == '__unassigned__':
+        machines = machines.filter(line_name='')
+    elif line_filter:
+        machines = machines.filter(line_name=line_filter)
+
+    today = timezone.localdate()
+    due_soon_limit = today + timedelta(days=30)
+    machine_rows = []
+    due_count = 0
+    due_soon_count = 0
+    safe_count = 0
+
+    for machine in machines:
+        next_service_date = None
+        service_status = 'Last service date needed'
+        if machine.last_service_date:
+            next_service_date = add_months(machine.last_service_date, machine.service_frequency)
+            if next_service_date <= today:
+                service_status = 'Due'
+                due_count += 1
+            elif next_service_date <= due_soon_limit:
+                service_status = 'Due Soon'
+                due_soon_count += 1
+            else:
+                service_status = 'Safe'
+                safe_count += 1
+
+        machine_rows.append({
+            'machine': machine,
+            'next_service_date': next_service_date,
+            'service_status': service_status,
+        })
+
+    return render(request, 'maintenance/preventive_maintenance.html', {
+        'machine_rows': machine_rows,
+        'lines': lines,
+        'selected_line': line_filter,
+        'due_count': due_count,
+        'due_soon_count': due_soon_count,
+        'safe_count': safe_count,
+        'due_soon_days': 30,
     })
 
 
