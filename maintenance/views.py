@@ -5,8 +5,8 @@ from datetime import date, timedelta
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
-from django.contrib.auth import login, logout
-from django.contrib.auth.models import User
+from django.contrib.auth import login, logout, authenticate
+from django.contrib.auth.models import User, Group
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.db.models import Count, Sum, Avg, Q, F, Min, Max
@@ -26,7 +26,7 @@ from .models import (
 )
 from .focas.simulator import CNCSimulator
 from .focas.collector import TelemetryCollector
-from .Backend.login_config import LOGIN_CREDENTIALS
+from .Backend.login_config import LOGIN_CREDENTIALS, LOGIN_ROLES
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -34,6 +34,15 @@ from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+
+
+def get_post_login_redirect(user):
+    """Determines post-login redirection based on role: Maintenance -> Andon Board, Admin/Developer -> Executive Dashboard."""
+    from .Backend.middleware import get_user_role
+    role = get_user_role(user)
+    if role in ["Maintenance Man", "Maintenance"]:
+        return redirect('andon_board')
+    return redirect('dashboard')
 
 
 ##############################################################################
@@ -44,28 +53,92 @@ from reportlab.lib import colors
 # Note          : Checks the configured credentials and opens the home page.
 ##############################################################################
 def login_page(request):
-    """Authenticate one of the configured application users."""
+    """Authenticate application users and redirect to role-specific home page."""
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        return get_post_login_redirect(request.user)
 
     error = ''
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '')
 
+        # 1. Check static predefined demo credentials
         if LOGIN_CREDENTIALS.get(username) == password:
             user, _ = User.objects.get_or_create(username=username)
             user.is_active = True
-            user.is_staff = username == 'admin'
-            user.is_superuser = username == 'admin'
+            user.is_staff = username in ['admin', 'Developer']
+            user.is_superuser = username in ['admin', 'Developer']
             user.set_password(password)
             user.save()
             login(request, user)
-            return redirect('dashboard')
+            return get_post_login_redirect(user)
+
+        # 2. Check dynamically registered users
+        auth_user = authenticate(request, username=username, password=password)
+        if auth_user is not None:
+            login(request, auth_user)
+            return get_post_login_redirect(auth_user)
 
         error = 'Username or password is incorrect.'
 
     return render(request, 'Login/login.html', {'error': error})
+
+
+##############################################################################
+# Function Name : register_user_view
+#
+# Parameters    : request - The current web request.
+#
+# Note          : Allows Admin or Developer users to register new users.
+##############################################################################
+def register_user_view(request):
+    """View to allow Admin or Developer users to register new application users."""
+    # Ensure only Admin or Developer can access
+    if not (request.user.username in ['admin', 'Developer'] or request.user.is_superuser or request.user.is_staff):
+        messages.error(request, "Access restricted: Only Administrators can register new users.")
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        username = request.POST.get('username', '').strip()
+        email = request.POST.get('email', '').strip()
+        password = request.POST.get('password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        selected_role = request.POST.get('role', 'Customer')
+
+        if not username or not password:
+            messages.error(request, "Username and Password are required fields.")
+        elif password != confirm_password:
+            messages.error(request, "Password confirmation does not match.")
+        elif User.objects.filter(username=username).exists():
+            messages.error(request, f"User with username '{username}' already exists.")
+        else:
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                first_name=first_name,
+                last_name=last_name
+            )
+            if selected_role in ['Customer', 'Admin']:
+                user.is_staff = True
+            elif selected_role == 'Developer':
+                user.is_staff = True
+                user.is_superuser = True
+            user.save()
+
+            # Store role group
+            group, _ = Group.objects.get_or_create(name=selected_role)
+            user.groups.add(group)
+
+            messages.success(request, f"User '{username}' registered successfully with role '{selected_role}'!")
+            return redirect('register_user')
+
+    registered_users = User.objects.all().order_by('-date_joined')
+    return render(request, 'maintenance/register_user.html', {
+        'registered_users': registered_users
+    })
 
 
 ##############################################################################

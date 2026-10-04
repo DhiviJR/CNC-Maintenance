@@ -25,7 +25,10 @@ urlpatterns = [
     path('simulator/', views.simulator_view, name='simulator'),
     path('api/simulate/', views.api_simulate_action, name='api_simulate_action'),
 
-    # 5. Export Reports
+    # 5. User Registration & Admin Management
+    path('register/', views.register_user_view, name='register_user'),
+
+    # 6. Export Reports
     path('export/excel/', views.export_tickets_excel, name='export_tickets_excel'),
     path('export/pdf/', views.export_tickets_pdf, name='export_tickets_pdf'),
     path('export-excel/', views.export_tickets_excel, name='export_excel'),

@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
+    ProductionLine,
     CNCMachine,
     FailureCategory,
     FailureSubCategory,
@@ -11,12 +12,23 @@ from .models import (
 )
 
 
+@admin.register(ProductionLine)
+class ProductionLineAdmin(admin.ModelAdmin):
+    list_display = ('line_code', 'name', 'location', 'machine_count', 'is_active')
+    list_filter = ('is_active',)
+    search_fields = ('line_code', 'name', 'location', 'description')
+
+    def machine_count(self, obj):
+        return obj.machines.count()
+    machine_count.short_description = 'CNCs Assigned'
+
+
 @admin.register(CNCMachine)
 class CNCMachineAdmin(admin.ModelAdmin):
-    fields = ('line_name', 'service_frequency', 'last_service_date', 'machine_code', 'name', 'model_number', 'controller_type', 'ip_address', 'port', 'timeout', 'location', 'current_status', 'qr_code_image', 'is_active')
-    list_display = ('line_name', 'service_frequency', 'last_service_date', 'machine_code', 'name', 'model_number', 'ip_address', 'port', 'status_badge', 'qr_preview', 'is_active', 'last_polled_at')
-    list_filter = ('line_name', 'service_frequency', 'current_status', 'is_active', 'controller_type')
-    search_fields = ('line_name', 'machine_code', 'name', 'ip_address', 'location')
+    fields = ('production_line', 'service_frequency', 'last_service_date', 'machine_code', 'name', 'model_number', 'controller_type', 'ip_address', 'port', 'timeout', 'location', 'current_status', 'qr_code_image', 'is_active')
+    list_display = ('production_line', 'service_frequency', 'last_service_date', 'machine_code', 'name', 'model_number', 'ip_address', 'port', 'status_badge', 'qr_preview', 'is_active', 'last_polled_at')
+    list_filter = ('production_line', 'service_frequency', 'current_status', 'is_active', 'controller_type')
+    search_fields = ('production_line__line_code', 'production_line__name', 'machine_code', 'name', 'ip_address', 'location')
     readonly_fields = ('current_status', 'last_status_change', 'last_polled_at', 'qr_preview_large', 'created_at', 'updated_at')
     actions = ['sync_focas_status']
 

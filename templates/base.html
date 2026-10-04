@@ -95,10 +95,6 @@
                         <i class="fa-solid fa-industry w-6 text-center text-base mr-2"></i> CNC Machines
                     </a>
 
-                    <a href="{% url 'scanner' %}" class="flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-colors">
-                        <i class="fa-solid fa-qrcode w-6 text-center text-base mr-2"></i> Scan QR Attendance
-                    </a>
-
                     <a href="{% url 'ticket_list' %}" class="flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors {% if request.resolver_match.url_name == 'ticket_list' or request.resolver_match.url_name == 'ticket_detail' %}bg-blue-600 text-white shadow-sm{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
                         <i class="fa-solid fa-wrench w-6 text-center text-base mr-2"></i> Breakdown
                     </a>
@@ -129,6 +125,12 @@
             <div>
                 <span class="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Administration</span>
                 <div class="mt-2 space-y-1">
+                    {% if request.user.username == 'admin' or request.user.username == 'Developer' or request.user.is_staff or request.user.is_superuser %}
+                    <a href="{% url 'register_user' %}" class="flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors {% if request.resolver_match.url_name == 'register_user' %}bg-blue-600 text-white shadow-sm{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
+                        <i class="fa-solid fa-user-plus w-6 text-center text-base mr-2"></i> Register New User
+                    </a>
+                    {% endif %}
+
                     <a href="/admin/" target="_blank" class="flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors text-slate-400 hover:bg-slate-800 hover:text-white">
                         <i class="fa-solid fa-database w-6 text-center text-base mr-2"></i> Master Data Admin
                     </a>

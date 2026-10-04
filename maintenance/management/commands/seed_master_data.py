@@ -2,6 +2,7 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from maintenance.models import (
+    ProductionLine,
     CNCMachine,
     FailureCategory,
     FailureSubCategory,
@@ -122,17 +123,40 @@ class Command(BaseCommand):
                 part_count += 1
         self.stdout.write(self.style.SUCCESS(f"Seeded {part_count} spare parts in master catalog."))
 
-        # 5. CNC Machines Fleet
+        # 5. Production Lines Master Table
+        lines_data = [
+            ("LINE-01", "Line 1 - Crankshaft Machining", "Shop Floor Bay 1", "High-volume crankshaft production line"),
+            ("LINE-02", "Line 2 - Cylinder Block Line", "Shop Floor Bay 1", "Heavy VMC cylinder block line"),
+            ("LINE-03", "Line 3 - Gearbox Turning Cell", "Shop Floor Bay 2", "High precision turning and lathe cell"),
+            ("LINE-04", "Line 4 - Sub-Assembly Line", "Shop Floor Bay 3", "General component sub-assembly line"),
+        ]
+
+        production_lines = {}
+        for l_code, l_name, l_loc, l_desc in lines_data:
+            line_obj, _ = ProductionLine.objects.get_or_create(
+                line_code=l_code,
+                defaults={
+                    "name": l_name,
+                    "location": l_loc,
+                    "description": l_desc,
+                    "is_active": True,
+                }
+            )
+            production_lines[l_code] = line_obj
+        self.stdout.write(self.style.SUCCESS(f"Seeded {len(production_lines)} production lines in master catalog."))
+
+        # 6. CNC Machines Fleet
         machines = [
-            ("CNC-01", "Fanuc Robodrill α-D21MiB5", "α-D21MiB5", "FANUC 31i-B", "192.168.1.101", 8193, "Bay 1 - Machining Line A"),
-            ("CNC-02", "Doosan DNM 5700 VMC", "DNM 5700", "FANUC 0i-MF Plus", "192.168.1.102", 8193, "Bay 1 - Machining Line A"),
-            ("CNC-03", "BFW Dhruva VMC 400", "Dhruva 400", "FANUC 0i-MF", "192.168.1.103", 8193, "Bay 2 - High Precision Bay"),
-            ("CNC-04", "Ace Micromatic Spark CNC Lathe", "Spark 200", "FANUC 0i-TF", "192.168.1.104", 8193, "Bay 2 - Turning Cell"),
-            ("CNC-05", "Mazak VCN-530C Vertical", "VCN-530C", "SmoothG / Fanuc", "192.168.1.105", 8193, "Bay 3 - Heavy Machining"),
+            ("CNC-01", "Fanuc Robodrill α-D21MiB5", "α-D21MiB5", "FANUC 31i-B", "192.168.1.101", 8193, "Bay 1 - Machining Line A", "LINE-01"),
+            ("CNC-02", "Doosan DNM 5700 VMC", "DNM 5700", "FANUC 0i-MF Plus", "192.168.1.102", 8193, "Bay 1 - Machining Line A", "LINE-01"),
+            ("CNC-03", "BFW Dhruva VMC 400", "Dhruva 400", "FANUC 0i-MF", "192.168.1.103", 8193, "Bay 2 - High Precision Bay", "LINE-02"),
+            ("CNC-04", "Ace Micromatic Spark CNC Lathe", "Spark 200", "FANUC 0i-TF", "192.168.1.104", 8193, "Bay 2 - Turning Cell", "LINE-03"),
+            ("CNC-05", "Mazak VCN-530C Vertical", "VCN-530C", "SmoothG / Fanuc", "192.168.1.105", 8193, "Bay 3 - Heavy Machining", "LINE-04"),
         ]
 
         mach_count = 0
-        for m_code, name, model, ctrl, ip, port, loc in machines:
+        for m_code, name, model, ctrl, ip, port, loc, l_code in machines:
+            p_line = production_lines.get(l_code)
             mach, created = CNCMachine.objects.get_or_create(
                 machine_code=m_code,
                 defaults={
@@ -142,9 +166,15 @@ class Command(BaseCommand):
                     "ip_address": ip,
                     "port": port,
                     "location": loc,
+                    "production_line": p_line,
+                    "line_name": p_line.name if p_line else "",
                     "current_status": "IDLE" if m_code in ["CNC-02", "CNC-04"] else "RUNNING" if m_code in ["CNC-01", "CNC-03"] else "OFFLINE",
                 }
             )
+            if not created and not mach.production_line:
+                mach.production_line = p_line
+                mach.line_name = p_line.name if p_line else mach.line_name
+                mach.save()
             if created:
                 mach_count += 1
         self.stdout.write(self.style.SUCCESS(f"Seeded {mach_count} CNC machines (with auto-generated QR codes)."))

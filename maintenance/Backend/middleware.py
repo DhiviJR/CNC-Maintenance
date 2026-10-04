@@ -5,6 +5,24 @@ from django.urls import reverse
 from .login_config import LOGIN_ROLES
 
 
+def get_user_role(user):
+    """Utility to resolve user role across predefined and registered users."""
+    if not user or not user.is_authenticated:
+        return None
+    role = LOGIN_ROLES.get(user.username)
+    if not role:
+        group = user.groups.first() if hasattr(user, 'groups') else None
+        if group:
+            role = group.name
+        elif user.is_superuser or user.username == 'Developer':
+            role = "Developer"
+        elif user.is_staff or user.username == 'admin':
+            role = "Customer"
+        else:
+            role = "Maintenance Man"
+    return role
+
+
 ##############################################################################
 # Class Name : LoginMiddleware
 #
@@ -41,7 +59,7 @@ class LoginMiddleware:
         if not request.user.is_authenticated:
             return redirect(login_path)
 
-        role = LOGIN_ROLES.get(request.user.username)
+        role = get_user_role(request.user)
 
         if request.path_info.startswith("/simulator/") and role != "Developer":
             return redirect("dashboard")

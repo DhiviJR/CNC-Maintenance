@@ -7,6 +7,25 @@ from django.core.files.base import ContentFile
 import qrcode
 
 
+class ProductionLine(models.Model):
+    """Master table for Production / Shop Floor Lines."""
+    line_code = models.CharField(max_length=50, unique=True, verbose_name="Line Code", help_text="Unique Line Code (e.g. LINE-01)")
+    name = models.CharField(max_length=100, verbose_name="Line Name", help_text="Descriptive Line Name (e.g. Crankshaft Machining Line)")
+    location = models.CharField(max_length=100, blank=True, default="Shop Floor Bay 1")
+    description = models.TextField(blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Production Line"
+        verbose_name_plural = "Production Lines"
+        ordering = ['line_code']
+
+    def __str__(self):
+        return f"{self.line_code} - {self.name}" if self.name else self.line_code
+
+
 class CNCMachine(models.Model):
     SERVICE_FREQUENCY_CHOICES = [
         (month, f"{month} month" if month == 1 else f"{month} months")
@@ -22,6 +41,15 @@ class CNCMachine(models.Model):
         ('OFFLINE', 'Offline'),
     ]
 
+    production_line = models.ForeignKey(
+        ProductionLine,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='machines',
+        verbose_name="Line",
+        help_text="Select Production Line from Master Table"
+    )
     line_name = models.CharField(max_length=100, default="", verbose_name="Line Name")
     service_frequency = models.PositiveSmallIntegerField(
         choices=SERVICE_FREQUENCY_CHOICES,
@@ -52,6 +80,11 @@ class CNCMachine(models.Model):
 
     def __str__(self):
         return f"{self.machine_code} - {self.name} [{self.get_current_status_display()}]"
+
+    def save(self, *args, **kwargs):
+        if self.production_line:
+            self.line_name = self.production_line.name
+        super().save(*args, **kwargs)
 
     def generate_qr_code(self):
         """Generates a QR code image encoding the machine scan payload."""
