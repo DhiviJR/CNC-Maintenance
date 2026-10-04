@@ -25,7 +25,7 @@ class ProductionLineAdmin(admin.ModelAdmin):
 
 @admin.register(CNCMachine)
 class CNCMachineAdmin(admin.ModelAdmin):
-    fields = ('production_line', 'service_frequency', 'last_service_date', 'machine_code', 'name', 'model_number', 'controller_type', 'ip_address', 'port', 'timeout', 'location', 'current_status', 'qr_code_image', 'is_active')
+    fields = ('production_line', 'service_frequency', 'last_service_date', 'machine_code', 'name', 'model_number', 'controller_type', 'purchase_date', 'ip_address', 'port', 'timeout', 'location', 'current_status', 'qr_code_image', 'is_active')
     list_display = ('production_line', 'service_frequency', 'last_service_date', 'machine_code', 'name', 'model_number', 'ip_address', 'port', 'status_badge', 'qr_preview', 'is_active', 'last_polled_at')
     list_filter = ('production_line', 'service_frequency', 'current_status', 'is_active', 'controller_type')
     search_fields = ('production_line__line_code', 'production_line__name', 'machine_code', 'name', 'ip_address', 'location')

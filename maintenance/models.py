@@ -61,6 +61,7 @@ class CNCMachine(models.Model):
     name = models.CharField(max_length=100, help_text="Machine name (e.g. Fanuc Robodrill Alpha)")
     model_number = models.CharField(max_length=100, blank=True, null=True)
     controller_type = models.CharField(max_length=50, default="FANUC 0i-MF / 31i")
+    purchase_date = models.DateField(blank=True, null=True, verbose_name="Purchase Date")
     ip_address = models.GenericIPAddressField(default="192.168.1.101")
     port = models.PositiveIntegerField(default=8193)
     timeout = models.PositiveIntegerField(default=10, help_text="Timeout in seconds for FOCAS connection")
@@ -81,11 +82,6 @@ class CNCMachine(models.Model):
     def __str__(self):
         return f"{self.machine_code} - {self.name} [{self.get_current_status_display()}]"
 
-    def save(self, *args, **kwargs):
-        if self.production_line:
-            self.line_name = self.production_line.name
-        super().save(*args, **kwargs)
-
     def generate_qr_code(self):
         """Generates a QR code image encoding the machine scan payload."""
         payload = f"CNC_MACHINE:{self.machine_code}"
@@ -105,8 +101,13 @@ class CNCMachine(models.Model):
         self.qr_code_image.save(filename, ContentFile(buffer.getvalue()), save=False)
 
     def save(self, *args, **kwargs):
+        if self.production_line:
+            self.line_name = self.production_line.name
         if not self.qr_code_image:
             self.generate_qr_code()
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and self.production_line:
+            kwargs['update_fields'] = set(update_fields) | {'line_name'}
         super().save(*args, **kwargs)
 
 

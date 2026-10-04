@@ -13,22 +13,26 @@
     </div>
 
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div class="rounded-xl border border-red-200 bg-red-50 p-5">
+        <a href="?status=Due{% if selected_line %}&amp;line={{ selected_line|urlencode }}{% endif %}" aria-label="Show CNC machines due for service" class="block rounded-xl border border-red-200 bg-red-50 p-5 transition hover:-translate-y-0.5 hover:border-red-400 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-red-400 {% if selected_service_status == 'Due' %}ring-2 ring-red-400{% endif %}">
             <div class="text-sm font-semibold text-red-700">Due CNC Machines</div>
             <div class="mt-2 text-3xl font-extrabold text-red-900">{{ due_count }}</div>
-        </div>
-        <div class="rounded-xl border border-amber-200 bg-amber-50 p-5">
+            <div class="mt-2 text-xs font-semibold text-red-700">View due machines <i class="fa-solid fa-arrow-right ml-1"></i></div>
+        </a>
+        <a href="?status=Due%20Soon{% if selected_line %}&amp;line={{ selected_line|urlencode }}{% endif %}" aria-label="Show CNC machines due soon" class="block rounded-xl border border-amber-200 bg-amber-50 p-5 transition hover:-translate-y-0.5 hover:border-amber-400 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-amber-400 {% if selected_service_status == 'Due Soon' %}ring-2 ring-amber-400{% endif %}">
             <div class="text-sm font-semibold text-amber-700">Due Soon CNC Machines</div>
             <div class="mt-2 text-3xl font-extrabold text-amber-900">{{ due_soon_count }}</div>
             <div class="mt-1 text-xs text-amber-700">Due within {{ due_soon_days }} days</div>
-        </div>
-        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+            <div class="mt-2 text-xs font-semibold text-amber-700">View due soon machines <i class="fa-solid fa-arrow-right ml-1"></i></div>
+        </a>
+        <a href="?status=Safe{% if selected_line %}&amp;line={{ selected_line|urlencode }}{% endif %}" aria-label="Show safe CNC machines" class="block rounded-xl border border-emerald-200 bg-emerald-50 p-5 transition hover:-translate-y-0.5 hover:border-emerald-400 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-400 {% if selected_service_status == 'Safe' %}ring-2 ring-emerald-400{% endif %}">
             <div class="text-sm font-semibold text-emerald-700">Safe CNC Machines</div>
             <div class="mt-2 text-3xl font-extrabold text-emerald-900">{{ safe_count }}</div>
-        </div>
+            <div class="mt-2 text-xs font-semibold text-emerald-700">View safe machines <i class="fa-solid fa-arrow-right ml-1"></i></div>
+        </a>
     </div>
 
     <form method="get" class="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        {% if selected_service_status %}<input type="hidden" name="status" value="{{ selected_service_status }}">{% endif %}
         <div class="flex flex-col gap-1">
             <label for="pm-line-filter" class="text-xs font-bold uppercase tracking-wide text-slate-500">Line</label>
             <select id="pm-line-filter" name="line" class="min-w-56 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">
@@ -41,9 +45,10 @@
             </select>
         </div>
         <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Filter</button>
-        {% if selected_line %}
+        {% if selected_line or selected_service_status %}
             <a href="{% url 'preventive_maintenance' %}" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Clear</a>
         {% endif %}
+        {% if selected_service_status %}<span class="text-sm font-semibold text-slate-600">Showing: {{ selected_service_status }}</span>{% endif %}
     </form>
 
     <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -61,6 +66,9 @@
             </thead>
             <tbody class="divide-y divide-slate-100">
                 {% for row in machine_rows %}
+                    {% ifchanged row.service_status %}
+                        <tr class="bg-slate-50"><th colspan="7" class="px-4 py-2 text-left text-xs font-bold uppercase tracking-wide text-slate-600">{{ row.service_status }} Machines</th></tr>
+                    {% endifchanged %}
                     <tr class="hover:bg-slate-50">
                         <td class="whitespace-nowrap px-4 py-3 text-slate-600">{{ row.machine.line_name|default:'Unassigned' }}</td>
                         <td class="px-4 py-3">

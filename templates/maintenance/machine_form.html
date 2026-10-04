@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Edit {{ machine.machine_code }} | CNC Maintenance{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'maintenance/machine_form.css' %}">
+{% endblock %}
+
+{% block content %}
+<div id="machine-edit-page">
+    <header id="machine-edit-header">
+        <div id="machine-edit-title">
+            <div id="machine-edit-icon"><i class="fa-solid fa-industry"></i></div>
+            <div>
+                <h1>Edit CNC Machine</h1>
+                <p>Update the machine’s master data and preventive maintenance details.</p>
+            </div>
+        </div>
+        <a id="machine-edit-back" href="{% url 'machine_list' %}"><i class="fa-solid fa-arrow-left"></i> Back to CNC Machines</a>
+    </header>
+
+    <div id="machine-edit-identity">
+        <span>Machine Code</span>
+        <strong>{{ machine.machine_code }}</strong>
+    </div>
+
+    <form id="machine-edit-form" method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div id="machine-form-errors">{{ form.non_field_errors }}</div>{% endif %}
+        {% for field in form %}
+            <div id="machine-field-{{ field.name }}">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<p>{{ field.help_text }}</p>{% endif %}
+                {% for error in field.errors %}<p id="machine-error-{{ field.name }}">{{ error }}</p>{% endfor %}
+            </div>
+        {% endfor %}
+        <div id="machine-form-actions">
+            <button id="machine-save-button" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+            <a id="machine-cancel-button" href="{% url 'machine_list' %}">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

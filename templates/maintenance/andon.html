@@ -31,9 +31,6 @@
         </div>
 
         <div class="flex items-center space-x-6">
-            <button id="toggle-audio" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs rounded-lg text-slate-300 flex items-center gap-2 border border-slate-700">
-                <i id="audio-icon" class="fa-solid fa-volume-xmark"></i> Audio Alarm <span id="audio-state">Muted</span>
-            </button>
             <div class="text-right">
                 <div id="live-clock" class="text-2xl font-mono font-bold text-emerald-400">--:--:--</div>
                 <div class="text-xs text-slate-400">Shift A (06:00 - 14:00)</div>
@@ -90,6 +87,14 @@
             </select>
         </div>
         <button id="clear-filters" type="button" class="rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800">Clear filters</button>
+        <div class="ml-auto self-center flex items-center gap-2">
+            <a href="{% url 'preventive_maintenance' %}" class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-500">
+                <i class="fa-solid fa-screwdriver-wrench"></i> Preventive Maintenance
+            </a>
+            <button id="toggle-audio" type="button" title="Enable alarm audio" aria-label="Enable alarm audio" aria-pressed="false" class="inline-flex h-8 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 p-0 text-slate-300 hover:bg-slate-700">
+                <i id="audio-icon" aria-hidden="true" class="fa-solid fa-volume-xmark text-lg"></i>
+            </button>
+        </div>
     </section>
 
     <!-- Machine Fleet Status Cards Grid -->
@@ -133,8 +138,8 @@
                     <span id="duration-{{ m.machine_code }}" class="font-bold text-slate-200">{{ m.last_status_change|timesince }}</span>
                 </div>
             </div>
-            <a href="{% url 'preventive_maintenance' %}" class="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-500">
-                <i class="fa-solid fa-screwdriver-wrench"></i> Preventive Maintenance
+            <a href="{% url 'scanner' %}?target_machine={{ m.machine_code }}{% if m.active_ticket %}&amp;ticket_id={{ m.active_ticket.id }}{% endif %}" class="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500">
+                <i class="fa-solid fa-qrcode"></i> Scan QR &amp; Attend
             </a>
         </div>
         {% endfor %}
@@ -167,17 +172,19 @@
         let audioEnabled = false;
         const toggleBtn = document.getElementById('toggle-audio');
         const audioIcon = document.getElementById('audio-icon');
-        const audioState = document.getElementById('audio-state');
 
         toggleBtn.addEventListener('click', () => {
             audioEnabled = !audioEnabled;
+            toggleBtn.setAttribute('aria-pressed', String(audioEnabled));
             if (audioEnabled) {
-                audioIcon.className = "fa-solid fa-volume-high text-emerald-400";
-                audioState.innerText = "Active";
+                audioIcon.className = "fa-solid fa-volume-high text-lg text-emerald-400";
+                toggleBtn.title = "Mute alarm audio";
+                toggleBtn.setAttribute('aria-label', 'Mute alarm audio');
                 playBeep();
             } else {
-                audioIcon.className = "fa-solid fa-volume-xmark";
-                audioState.innerText = "Muted";
+                audioIcon.className = "fa-solid fa-volume-xmark text-lg";
+                toggleBtn.title = "Enable alarm audio";
+                toggleBtn.setAttribute('aria-label', 'Enable alarm audio');
             }
         });
 

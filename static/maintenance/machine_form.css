@@ -1,0 +1,153 @@
+#machine-edit-page {
+    display: grid;
+    gap: 18px;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+#machine-edit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 22px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    box-shadow: 0 4px 12px #0f172a0d;
+}
+
+#machine-edit-title { display: flex; align-items: center; gap: 14px; }
+
+#machine-edit-icon {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    color: #1d4ed8;
+    background: #dbeafe;
+    border-radius: 12px;
+    font-size: 1.25rem;
+}
+
+#machine-edit-header h1 { margin: 0; color: #0f172a; font-size: 1.4rem; font-weight: 750; }
+#machine-edit-header p { margin: 5px 0 0; color: #64748b; font-size: 0.9rem; }
+
+#machine-edit-back {
+    padding: 9px 12px;
+    color: #334155;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 650;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+#machine-edit-back:hover { background: #f1f5f9; }
+
+#machine-edit-identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    color: #1e3a8a;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+}
+
+#machine-edit-identity span { color: #64748b; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+#machine-edit-identity strong { font-family: Consolas, monospace; font-size: 1rem; }
+
+#machine-edit-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    padding: 24px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    box-shadow: 0 4px 12px #0f172a0d;
+}
+
+#machine-edit-form > div { min-width: 0; }
+
+#machine-edit-form label {
+    display: block;
+    margin-bottom: 7px;
+    color: #334155;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+#machine-edit-form input:not([type="checkbox"]),
+#machine-edit-form select,
+#machine-edit-form textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 11px;
+    color: #0f172a;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+#machine-edit-form input:focus,
+#machine-edit-form select:focus,
+#machine-edit-form textarea:focus {
+    outline: 3px solid #bfdbfe;
+    border-color: #3b82f6;
+}
+
+#machine-edit-form input[type="checkbox"] { width: 18px; height: 18px; accent-color: #2563eb; }
+#machine-field-is_active { display: flex; align-items: center; gap: 10px; }
+#machine-field-is_active label { margin: 0; }
+#machine-field-is_active input { order: -1; }
+
+#machine-edit-form p { margin: 6px 0 0; color: #64748b; font-size: 0.75rem; }
+#machine-edit-form p[id^="machine-error-"] { color: #b91c1c; font-weight: 600; }
+#machine-form-errors { grid-column: 1 / -1; padding: 12px 14px; color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; }
+#machine-form-errors ul { margin: 0; padding-left: 18px; }
+
+#machine-form-actions {
+    display: flex;
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #e2e8f0;
+}
+
+#machine-save-button,
+#machine-cancel-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+#machine-save-button { color: #fff; background: #2563eb; border: 0; cursor: pointer; }
+#machine-save-button:hover { background: #1d4ed8; }
+#machine-cancel-button { color: #334155; background: #fff; border: 1px solid #cbd5e1; }
+#machine-cancel-button:hover { background: #f8fafc; }
+
+@media (max-width: 640px) {
+    #machine-edit-header { align-items: flex-start; flex-direction: column; }
+    #machine-edit-form { grid-template-columns: 1fr; padding: 18px; }
+    #machine-form-errors,
+    #machine-form-actions { grid-column: 1; }
+    #machine-form-actions { justify-content: stretch; }
+    #machine-save-button,
+    #machine-cancel-button { flex: 1; }
+}

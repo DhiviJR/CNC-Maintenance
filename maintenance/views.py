@@ -28,6 +28,7 @@ from .models import (
 from .focas.simulator import CNCSimulator
 from .focas.collector import TelemetryCollector
 from .Backend.login_config import LOGIN_CREDENTIALS, LOGIN_ROLES
+from .Backend.forms import MachineForm
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -353,6 +354,45 @@ def machine_list_view(request):
     })
 
 
+##############################################################################
+# Function Name : machine_edit_view
+#
+# Parameters    : request - The current web request.
+#                 machine_code - The code of the machine to edit.
+#
+# Note          : Saves changes to one CNC machine's master data.
+##############################################################################
+def machine_edit_view(request, machine_code):
+    machine = get_object_or_404(CNCMachine, machine_code=machine_code)
+    form = MachineForm(request.POST or None, instance=machine)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, f"Machine {machine.machine_code} was updated.")
+        return redirect('machine_list')
+    return render(request, 'maintenance/machine_form.html', {
+        'form': form,
+        'machine': machine,
+    })
+
+
+##############################################################################
+# Function Name : machine_delete_view
+#
+# Parameters    : request - The current web request.
+#                 machine_code - The code of the machine to delete.
+#
+# Note          : Deletes a machine after the user confirms the action.
+##############################################################################
+def machine_delete_view(request, machine_code):
+    machine = get_object_or_404(CNCMachine, machine_code=machine_code)
+    if request.method == 'POST':
+        machine_code = machine.machine_code
+        machine.delete()
+        messages.success(request, f"Machine {machine_code} and its linked history were deleted.")
+        return redirect('machine_list')
+    return render(request, 'maintenance/machine_confirm_delete.html', {'machine': machine})
+
+
 def machine_detail_view(request, machine_code):
     """Detailed view for a single machine with history and QR code."""
     machine = get_object_or_404(CNCMachine, machine_code=machine_code)
@@ -630,6 +670,12 @@ def ticket_list_view(request):
     tickets = BreakdownTicket.objects.select_related('machine', 'technician', 'failure_sub_category__category').order_by('-alarm_time')
 
     # Filters
+    line = request.GET.get('line', '')
+    if line == '__unassigned__':
+        tickets = tickets.filter(machine__line_name='')
+    elif line:
+        tickets = tickets.filter(machine__line_name=line)
+
     status = request.GET.get('status')
     if status:
         tickets = tickets.filter(status=status)
@@ -646,10 +692,13 @@ def ticket_list_view(request):
     if category:
         tickets = tickets.filter(failure_sub_category__category__code=category)
 
-    machines = CNCMachine.objects.filter(is_active=True)
+    machines = CNCMachine.objects.filter(is_active=True).order_by('machine_code')
+    lines = CNCMachine.objects.filter(is_active=True).values_list('line_name', flat=True).distinct().order_by('line_name')
     return render(request, 'maintenance/ticket_list.html', {
         'tickets': tickets,
         'machines': machines,
+        'lines': lines,
+        'selected_line': line,
         'selected_status': status,
         'selected_machine': machine_code,
         'selected_shift': shift,
@@ -754,9 +803,14 @@ def andon_board_view(request):
     """
     machines = CNCMachine.objects.filter(is_active=True).order_by('machine_code')
     lines = machines.values_list('line_name', flat=True).distinct().order_by('line_name')
-    active_alarms = BreakdownTicket.objects.filter(
+    active_alarms = list(BreakdownTicket.objects.filter(
         status__in=['OPEN_ALARM', 'ACKNOWLEDGED', 'UNDER_REPAIR']
-    ).select_related('machine', 'technician').order_by('-alarm_time')
+    ).select_related('machine', 'technician').order_by('-alarm_time'))
+    ticket_by_machine = {}
+    for ticket in active_alarms:
+        ticket_by_machine.setdefault(ticket.machine_id, ticket)
+    for machine in machines:
+        machine.active_ticket = ticket_by_machine.get(machine.machine_code)
     breakdown_machine_codes = set(
         machines.filter(
             Q(current_status__in=['ALARM', 'EMERGENCY_STOP', 'UNDER_MAINTENANCE']) |
@@ -796,6 +850,9 @@ def add_months(service_date, months):
 ##############################################################################
 def preventive_maintenance_view(request):
     line_filter = request.GET.get('line', '')
+    selected_service_status = request.GET.get('status', '')
+    if selected_service_status not in {'Due', 'Due Soon', 'Safe'}:
+        selected_service_status = ''
 
     if request.method == 'POST':
         machine = get_object_or_404(
@@ -851,6 +908,14 @@ def preventive_maintenance_view(request):
             'service_status': service_status,
         })
 
+    service_status_order = {
+        'Due': ['Due', 'Due Soon', 'Safe'],
+        'Due Soon': ['Due Soon', 'Due', 'Safe'],
+        'Safe': ['Safe', 'Due Soon', 'Due'],
+    }
+    status_order = service_status_order.get(selected_service_status, ['Due', 'Due Soon', 'Safe'])
+    machine_rows.sort(key=lambda row: status_order.index(row['service_status']) if row['service_status'] in status_order else len(status_order))
+
     return render(request, 'maintenance/preventive_maintenance.html', {
         'machine_rows': machine_rows,
         'lines': lines,
@@ -859,6 +924,7 @@ def preventive_maintenance_view(request):
         'due_soon_count': due_soon_count,
         'safe_count': safe_count,
         'due_soon_days': 30,
+        'selected_service_status': selected_service_status,
     })
 
 

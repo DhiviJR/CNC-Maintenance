@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Delete {{ machine.machine_code }} | CNC Maintenance{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'maintenance/machine_confirm_delete.css' %}">
+{% endblock %}
+
+{% block content %}
+<div id="machine-delete-page">
+    <section id="machine-delete-card">
+        <div id="machine-delete-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <h1>Delete this CNC machine?</h1>
+        <p id="machine-delete-intro">You are about to permanently remove this machine from the system.</p>
+
+        <div id="machine-delete-identity">
+            <span>Machine</span>
+            <strong>{{ machine.machine_code }}</strong>
+            <span id="machine-delete-name">{{ machine.name }}</span>
+        </div>
+
+        <div id="machine-delete-warning">
+            <strong>This action cannot be undone.</strong>
+            <p>Its breakdown tickets, spare usage, and machine status history will also be deleted.</p>
+        </div>
+
+        <form id="machine-delete-form" method="post">
+            {% csrf_token %}
+            <button id="machine-delete-confirm" type="submit"><i class="fa-solid fa-trash"></i> Delete Machine</button>
+            <a id="machine-delete-cancel" href="{% url 'machine_list' %}">Cancel</a>
+        </form>
+    </section>
+</div>
+{% endblock %}

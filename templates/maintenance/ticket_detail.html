@@ -247,7 +247,7 @@
                 </div>
                 <div class="md:col-span-4">
                     <button type="submit" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg shadow-sm">
-                        <i class="fa-solid fa-plus mr-1"></i> Add Part
+                        <i class="fa-solid fa-floppy-disk mr-1"></i> Save
                     </button>
                 </div>
             </div>
@@ -284,25 +284,15 @@
                 <textarea name="resolution_notes" rows="3" required class="w-full text-sm border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500" placeholder="Detail the repairs performed, tests executed, lubrication added, etc."></textarea>
             </div>
             <button type="submit" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg shadow-sm flex items-center gap-2">
-                <i class="fa-solid fa-check"></i> Complete Repair (Log t_resolve)
+                <i class="fa-solid fa-check"></i> Complete Repair
             </button>
         </form>
 
         {% elif ticket.status == 'RESOLVED' %}
-        <!-- Production Resumption Button -->
         <div class="bg-emerald-50 border border-emerald-200 p-5 rounded-lg text-center mt-3">
-            <h3 class="font-bold text-emerald-900 text-base">Repair Finished! Ready to Resume Production</h3>
-            <p class="text-xs text-emerald-700 mt-1 mb-4">
-                Total Downtime (MTTR): <strong>{{ ticket.total_downtime_seconds|default:0 }} seconds</strong>.
-                When the operator restarts the CNC cutting cycle, click below (or telemetry will auto-detect RUNNING state):
-            </p>
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="resume_production">
-                <button type="submit" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg shadow-sm inline-flex items-center gap-2">
-                    <i class="fa-solid fa-play"></i> Confirm Production Resumed (Log t_run)
-                </button>
-            </form>
+            <h3 class="font-bold text-emerald-900 text-base"><i class="fa-solid fa-circle-check mr-1"></i> Repair Completed</h3>
+            <p class="text-xs text-emerald-700 mt-2">Total Downtime (MTTR): <strong>{{ ticket.total_downtime_seconds|default:0 }} seconds</strong>.</p>
+            {% if ticket.resolution_notes %}<p class="text-sm text-slate-700 mt-3"><strong>Repair notes:</strong> {{ ticket.resolution_notes }}</p>{% endif %}
         </div>
 
         {% elif ticket.status == 'CLOSED_RUNNING' %}

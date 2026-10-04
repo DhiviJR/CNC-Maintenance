@@ -26,7 +26,7 @@
 
     <!-- Filters Bar -->
     <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <form method="get" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+        <form method="get" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <div>
                 <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Status</label>
                 <select name="status" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-slate-50" onchange="this.form.submit()">
@@ -36,6 +36,16 @@
                     <option value="UNDER_REPAIR" {% if selected_status == 'UNDER_REPAIR' %}selected{% endif %}>Under Repair</option>
                     <option value="RESOLVED" {% if selected_status == 'RESOLVED' %}selected{% endif %}>Resolved</option>
                     <option value="CLOSED_RUNNING" {% if selected_status == 'CLOSED_RUNNING' %}selected{% endif %}>Closed / Running</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Line</label>
+                <select name="line" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-slate-50" onchange="this.form.submit()">
+                    <option value="">All Lines</option>
+                    {% for line in lines %}
+                    <option value="{% if line %}{{ line }}{% else %}__unassigned__{% endif %}" {% if line and selected_line == line or not line and selected_line == '__unassigned__' %}selected{% endif %}>{{ line|default:'Unassigned' }}</option>
+                    {% endfor %}
                 </select>
             </div>
 
