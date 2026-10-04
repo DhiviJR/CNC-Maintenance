@@ -1,5 +1,6 @@
 import json
 import calendar
+import csv
 from decimal import Decimal
 from datetime import date, timedelta
 from django.shortcuts import render, get_object_or_404, redirect
@@ -653,6 +654,92 @@ def ticket_list_view(request):
         'selected_machine': machine_code,
         'selected_shift': shift,
         'selected_category': category,
+    })
+
+
+##############################################################################
+# Function Name : breakdown_report_view
+#
+# Parameters    : request - The current web request.
+#
+# Note          : Filters breakdown tickets and displays or downloads a report.
+##############################################################################
+def breakdown_report_view(request):
+    all_machines = CNCMachine.objects.filter(is_active=True).order_by('line_name', 'machine_code')
+    lines = all_machines.values_list('line_name', flat=True).distinct().order_by('line_name')
+    selected_line = request.GET.get('line', '')
+    selected_machine = request.GET.get('machine', '')
+    start_date = parse_date(request.GET.get('from', ''))
+    end_date = parse_date(request.GET.get('to', ''))
+
+    machine_options = all_machines
+    if selected_line == '__unassigned__':
+        machine_options = machine_options.filter(line_name='')
+    elif selected_line:
+        machine_options = machine_options.filter(line_name=selected_line)
+
+    tickets = BreakdownTicket.objects.select_related(
+        'machine', 'technician', 'failure_sub_category__category'
+    ).prefetch_related('spares_used__spare_part').order_by('-alarm_time')
+
+    if selected_line == '__unassigned__':
+        tickets = tickets.filter(machine__line_name='')
+    elif selected_line:
+        tickets = tickets.filter(machine__line_name=selected_line)
+    if selected_machine:
+        tickets = tickets.filter(machine__machine_code=selected_machine)
+    if start_date:
+        tickets = tickets.filter(alarm_time__date__gte=start_date)
+    if end_date:
+        tickets = tickets.filter(alarm_time__date__lte=end_date)
+
+    if request.GET.get('download') == 'csv':
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="cnc_breakdown_report.csv"'
+        response.write('\ufeff')
+        writer = csv.writer(response)
+        writer.writerow([
+            'Ticket Number', 'Line', 'Machine Code', 'Machine Name', 'Status', 'Trigger', 'Shift',
+            'Alarm Code', 'Alarm Message', 'Alarm Time', 'Scan Time', 'Diagnosed Time',
+            'Resolved Time', 'Next Run Time', 'Response (seconds)', 'Repair (seconds)',
+            'Downtime (seconds)', 'Restart Delay (seconds)', '4M Category', 'Failure Cause',
+            'Technician', 'Symptoms', 'Resolution', 'Spares Used', 'Spares Cost',
+        ])
+        for ticket in tickets:
+            spares = '; '.join(
+                f"{usage.spare_part.part_code} x {usage.quantity}"
+                for usage in ticket.spares_used.all()
+            )
+            category = ticket.failure_sub_category.category.name if ticket.failure_sub_category else ''
+            failure = ticket.failure_sub_category.name if ticket.failure_sub_category else ''
+            writer.writerow([
+                ticket.ticket_number, ticket.machine.line_name, ticket.machine.machine_code,
+                ticket.machine.name, ticket.get_status_display(), ticket.get_trigger_source_display(),
+                ticket.shift, ticket.focas_alarm_code or '', ticket.focas_alarm_msg or '',
+                ticket.alarm_time, ticket.scan_time or '', ticket.diagnosed_time or '',
+                ticket.resolve_time or '', ticket.next_run_time or '', ticket.response_time_seconds or 0,
+                ticket.repair_time_seconds or 0, ticket.total_downtime_seconds or 0,
+                ticket.ramp_up_delay_seconds or 0, category, failure,
+                ticket.technician.username if ticket.technician else '', ticket.symptom_notes,
+                ticket.resolution_notes, spares, ticket.total_spares_cost,
+            ])
+        return response
+
+    summary = tickets.aggregate(
+        total_cost=Sum('total_spares_cost'),
+        total_downtime=Sum('total_downtime_seconds'),
+    )
+    return render(request, 'maintenance/breakdown_report.html', {
+        'tickets': tickets,
+        'lines': lines,
+        'machine_options': machine_options,
+        'selected_line': selected_line,
+        'selected_machine': selected_machine,
+        'start_date': request.GET.get('from', ''),
+        'end_date': request.GET.get('to', ''),
+        'ticket_count': tickets.count(),
+        'total_cost': summary['total_cost'] or Decimal('0.00'),
+        'total_downtime': summary['total_downtime'] or 0,
     })
 
 

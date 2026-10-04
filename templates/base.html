@@ -98,6 +98,10 @@
                     <a href="{% url 'ticket_list' %}" class="flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors {% if request.resolver_match.url_name == 'ticket_list' or request.resolver_match.url_name == 'ticket_detail' %}bg-blue-600 text-white shadow-sm{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
                         <i class="fa-solid fa-wrench w-6 text-center text-base mr-2"></i> Breakdown
                     </a>
+
+                    <a href="{% url 'breakdown_report' %}" class="flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors {% if request.resolver_match.url_name == 'breakdown_report' %}bg-blue-600 text-white shadow-sm{% else %}text-slate-300 hover:bg-slate-800 hover:text-white{% endif %}">
+                        <i class="fa-solid fa-file-lines w-6 text-center text-base mr-2"></i> Reports
+                    </a>
                 </div>
             </div>
 

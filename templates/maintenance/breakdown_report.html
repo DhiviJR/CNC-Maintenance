@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Breakdown Report | CNC Maintenance{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'maintenance/breakdown_report.css' %}">
+{% endblock %}
+
+{% block content %}
+<div id="report-page">
+    <div id="report-header">
+        <div>
+            <h1>Complete Breakdown Report</h1>
+            <p>Breakdown history, response and repair times, diagnosis, parts, and cost.</p>
+        </div>
+        <a id="report-download" href="?{{ request.GET.urlencode }}&amp;download=csv">
+            <i id="report-download-icon"></i> Download CSV
+        </a>
+    </div>
+
+    <form id="report-filter" method="get">
+        <div id="report-line-field">
+            <label for="report-line">Line</label>
+            <select id="report-line" name="line">
+                <option value="">All Lines</option>
+                {% for line in lines %}
+                    <option value="{% if line %}{{ line }}{% else %}__unassigned__{% endif %}" {% if line and selected_line == line or not line and selected_line == '__unassigned__' %}selected{% endif %}>{{ line|default:'Unassigned' }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div id="report-machine-field">
+            <label for="report-machine">Machine</label>
+            <select id="report-machine" name="machine">
+                <option value="">All Machines</option>
+                {% for machine in machine_options %}
+                    <option value="{{ machine.machine_code }}" {% if selected_machine == machine.machine_code %}selected{% endif %}>{{ machine.machine_code }} — {{ machine.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div id="report-from-field">
+            <label for="report-from">From Date</label>
+            <input id="report-from" name="from" type="date" value="{{ start_date }}">
+        </div>
+        <div id="report-to-field">
+            <label for="report-to">To Date</label>
+            <input id="report-to" name="to" type="date" value="{{ end_date }}">
+        </div>
+        <div id="report-filter-actions">
+            <button id="report-apply" type="submit">Apply Filters</button>
+            <a id="report-clear" href="{% url 'breakdown_report' %}">Clear</a>
+        </div>
+    </form>
+
+    <div id="report-summary">
+        <div id="report-ticket-summary">
+            <div>Breakdown Tickets</div>
+            <div>{{ ticket_count }}</div>
+        </div>
+        <div id="report-cost-summary">
+            <div>Total Spare Cost</div>
+            <div>₹{{ total_cost|floatformat:2 }}</div>
+        </div>
+        <div id="report-downtime-summary">
+            <div>Total Recorded Downtime</div>
+            <div>{{ total_downtime }} sec</div>
+        </div>
+    </div>
+
+    <div id="report-table-container">
+        <table id="report-table">
+            <thead>
+                <tr>
+                    <th>Ticket / Status</th>
+                    <th>Line / Machine</th>
+                    <th>Trigger / Shift</th>
+                    <th>Alarm</th>
+                    <th>Alarm Time</th>
+                    <th>Scan Time</th>
+                    <th>Diagnosed</th>
+                    <th>Resolved</th>
+                    <th>Next Run</th>
+                    <th>Response / Repair / Downtime</th>
+                    <th>4M Failure</th>
+                    <th>Technician</th>
+                    <th>Symptoms / Resolution</th>
+                    <th>Spares</th>
+                    <th>Parts Cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ticket in tickets %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'ticket_detail' ticket.id %}">{{ ticket.ticket_number }}</a>
+                            <div>{{ ticket.get_status_display }}</div>
+                        </td>
+                        <td>
+                            <div>{{ ticket.machine.line_name|default:'Unassigned' }}</div>
+                            <div>{{ ticket.machine.machine_code }}</div>
+                            <div>{{ ticket.machine.name }}</div>
+                        </td>
+                        <td>{{ ticket.get_trigger_source_display }}<br>{{ ticket.shift }}</td>
+                        <td>{{ ticket.focas_alarm_code|default:'—' }}<div>{{ ticket.focas_alarm_msg|default:'' }}</div></td>
+                        <td>{{ ticket.alarm_time|date:'Y-m-d H:i' }}</td>
+                        <td>{{ ticket.scan_time|date:'Y-m-d H:i'|default:'—' }}</td>
+                        <td>{{ ticket.diagnosed_time|date:'Y-m-d H:i'|default:'—' }}</td>
+                        <td>{{ ticket.resolve_time|date:'Y-m-d H:i'|default:'—' }}</td>
+                        <td>{{ ticket.next_run_time|date:'Y-m-d H:i'|default:'—' }}</td>
+                        <td>{{ ticket.response_time_seconds|default:0 }} / {{ ticket.repair_time_seconds|default:0 }} / {{ ticket.total_downtime_seconds|default:0 }} sec</td>
+                        <td>
+                            {% if ticket.failure_sub_category %}
+                                {{ ticket.failure_sub_category.category.name }}<br>{{ ticket.failure_sub_category.name }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>{{ ticket.technician.username|default:'—' }}</td>
+                        <td><strong>Symptom:</strong> {{ ticket.symptom_notes|default:'—' }}<br><strong>Resolution:</strong> {{ ticket.resolution_notes|default:'—' }}</td>
+                        <td>
+                            {% for usage in ticket.spares_used.all %}
+                                {{ usage.spare_part.part_code }} × {{ usage.quantity }} (₹{{ usage.line_total|floatformat:2 }}){% if not forloop.last %}<br>{% endif %}
+                            {% empty %}—{% endfor %}
+                        </td>
+                        <td>₹{{ ticket.total_spares_cost|floatformat:2 }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td id="report-empty-state" colspan="15">No breakdown tickets match these filters.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
