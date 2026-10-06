@@ -2,7 +2,7 @@ import json
 import calendar
 import csv
 from decimal import Decimal
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
@@ -29,6 +29,7 @@ from .focas.simulator import CNCSimulator
 from .focas.collector import TelemetryCollector
 from .Backend.login_config import LOGIN_CREDENTIALS, LOGIN_ROLES
 from .Backend.forms import MachineForm
+from .templatetags.duration_tags import format_duration
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -169,28 +170,48 @@ def dashboard_view(request):
     4.d 4M Failure Root-Cause Pareto & Cross-Machine comparison
     4.e Maintenance Cost per machine, per month, per year
     """
-    machines = CNCMachine.objects.filter(is_active=True)
-    total_machines = machines.count()
+    all_machines = CNCMachine.objects.filter(is_active=True).order_by('line_name', 'machine_code')
+    lines = all_machines.values_list('line_name', flat=True).distinct().order_by('line_name')
+
+    selected_line = request.GET.get('line', '')
+    selected_machine = request.GET.get('machine', '')
+    selected_shift = request.GET.get('shift', '')
+    days = int(request.GET.get('days', 30))
+
+    machines = all_machines
+    if selected_line == '__unassigned__':
+        machines = machines.filter(line_name='')
+    elif selected_line:
+        machines = machines.filter(line_name=selected_line)
+
+    if selected_machine:
+        machines_kpi = machines.filter(machine_code=selected_machine)
+    else:
+        machines_kpi = machines
+
+    total_machines = machines_kpi.count()
 
     # 4.a Fleet Status
-    running_count = machines.filter(current_status='RUNNING').count()
-    idle_count = machines.filter(current_status='IDLE').count()
-    alarm_count = machines.filter(current_status__in=['ALARM', 'EMERGENCY_STOP']).count()
-    maintenance_count = machines.filter(current_status='UNDER_MAINTENANCE').count()
-    offline_count = machines.filter(current_status='OFFLINE').count()
+    running_count = machines_kpi.filter(current_status='RUNNING').count()
+    idle_count = machines_kpi.filter(current_status='IDLE').count()
+    alarm_count = machines_kpi.filter(current_status__in=['ALARM', 'EMERGENCY_STOP']).count()
+    maintenance_count = machines_kpi.filter(current_status='UNDER_MAINTENANCE').count()
+    offline_count = machines_kpi.filter(current_status='OFFLINE').count()
 
     utilization_pct = round((running_count / total_machines * 100), 1) if total_machines > 0 else 0
 
     # Date range filter (default: last 30 days)
-    days = int(request.GET.get('days', 30))
     since_date = timezone.now() - timedelta(days=days)
 
     tickets = BreakdownTicket.objects.filter(alarm_time__gte=since_date)
-    selected_machine = request.GET.get('machine', '')
+    if selected_line == '__unassigned__':
+        tickets = tickets.filter(machine__line_name='')
+    elif selected_line:
+        tickets = tickets.filter(machine__line_name=selected_line)
+
     if selected_machine:
         tickets = tickets.filter(machine__machine_code=selected_machine)
 
-    selected_shift = request.GET.get('shift', '')
     if selected_shift:
         tickets = tickets.filter(shift=selected_shift)
 
@@ -266,6 +287,12 @@ def dashboard_view(request):
 
     # Active Alarms right now
     active_alarms = BreakdownTicket.objects.filter(status__in=['OPEN_ALARM', 'ACKNOWLEDGED', 'UNDER_REPAIR']).order_by('-alarm_time')
+    if selected_line == '__unassigned__':
+        active_alarms = active_alarms.filter(machine__line_name='')
+    elif selected_line:
+        active_alarms = active_alarms.filter(machine__line_name=selected_line)
+    if selected_machine:
+        active_alarms = active_alarms.filter(machine__machine_code=selected_machine)
 
     context = {
         'total_machines': total_machines,
@@ -276,9 +303,11 @@ def dashboard_view(request):
         'offline_count': offline_count,
         'utilization_pct': utilization_pct,
         'days': days,
+        'lines': lines,
+        'selected_line': selected_line,
         'selected_machine': selected_machine,
         'selected_shift': selected_shift,
-        'machines': machines,
+        'machines': all_machines,
         'total_tickets': tickets.count(),
         'avg_mtta_min': avg_mtta_min,
         'avg_mttr_min': avg_mttr_min,
@@ -319,7 +348,7 @@ def api_dashboard_data(request):
     active_tickets = list(BreakdownTicket.objects.filter(
         status__in=['OPEN_ALARM', 'ACKNOWLEDGED', 'UNDER_REPAIR']
     ).values(
-        'ticket_number', 'machine__machine_code', 'machine__location', 'status', 'trigger_source',
+        'id', 'ticket_number', 'machine__machine_code', 'machine__location', 'status', 'trigger_source',
         'focas_alarm_code', 'alarm_time'
     ))
 
@@ -493,7 +522,7 @@ def scan_machine_action(request, machine_code):
 
         messages.success(
             request,
-            f"Physical QR Verified! Attendance logged for {machine.machine_code}. Response Time: {open_ticket.response_time_seconds // 60}m {open_ticket.response_time_seconds % 60}s"
+            f"Physical QR Verified! Attendance logged for {machine.machine_code}. Response Time: {open_ticket.formatted_response_time}"
         )
         return redirect('ticket_detail', ticket_id=open_ticket.id)
 
@@ -507,9 +536,9 @@ def scan_machine_action(request, machine_code):
         messages.info(request, f"Ticket {in_progress.ticket_number} is already in progress for {machine.machine_code}.")
         return redirect('ticket_detail', ticket_id=in_progress.id)
 
-    # If no open alarm, offer to create manual maintenance request
-    messages.warning(request, f"No active alarm on {machine.machine_code}. You can create a maintenance request if needed.")
-    return redirect('create_ticket_for_machine', machine_code=machine.machine_code)
+    # If no open alarm, inform user that alarms must be triggered by machine controller
+    messages.warning(request, f"No active breakdown alarm on {machine.machine_code}. Alarms can only be triggered directly from the machine controller.")
+    return redirect('machine_detail', machine_code=machine.machine_code)
 
 
 # ==============================================================================
@@ -548,7 +577,7 @@ def ticket_detail_view(request, ticket_id):
             return redirect('ticket_detail', ticket_id=ticket.id)
 
         # ----------------------------------------------------------------------
-        # Step 3.e: Add Replaced Spare Part / Tool
+        # Add Replaced Spare Part / Tool
         # ----------------------------------------------------------------------
         elif action == 'add_spare':
             part_code = request.POST.get('part_code')
@@ -644,25 +673,7 @@ def ticket_detail_view(request, ticket_id):
     })
 
 
-def create_ticket_for_machine(request, machine_code):
-    """Manually creates a breakdown ticket for a machine (Operator Call)."""
-    machine = get_object_or_404(CNCMachine, machine_code=machine_code)
-    if request.method == 'POST':
-        trigger = request.POST.get('trigger_source', 'MANUAL')
-        symptom = request.POST.get('symptom_notes', '')
-        ticket = BreakdownTicket.objects.create(
-            machine=machine,
-            trigger_source=trigger,
-            status='OPEN_ALARM',
-            alarm_time=timezone.now(),
-            symptom_notes=symptom,
-        )
-        machine.current_status = 'ALARM'
-        machine.save(update_fields=['current_status'])
-        messages.success(request, f"Maintenance ticket {ticket.ticket_number} created!")
-        return redirect('ticket_detail', ticket_id=ticket.id)
 
-    return render(request, 'maintenance/create_ticket.html', {'machine': machine})
 
 
 def ticket_list_view(request):
@@ -713,13 +724,44 @@ def ticket_list_view(request):
 #
 # Note          : Filters breakdown tickets and displays or downloads a report.
 ##############################################################################
+def _filter_tickets_queryset(request):
+    """Utility helper to filter breakdown tickets by GET query params: line, machine, from (date), to (date)."""
+    tickets = BreakdownTicket.objects.select_related(
+        'machine', 'technician', 'failure_sub_category__category'
+    ).prefetch_related('spares_used__spare_part').order_by('-alarm_time')
+
+    selected_line = request.GET.get('line', '')
+    if selected_line == '__unassigned__':
+        tickets = tickets.filter(machine__line_name='')
+    elif selected_line:
+        tickets = tickets.filter(machine__line_name=selected_line)
+
+    selected_machine = request.GET.get('machine', '')
+    if selected_machine:
+        tickets = tickets.filter(machine__machine_code=selected_machine)
+
+    start_date = parse_date(request.GET.get('from', ''))
+    if start_date:
+        dt_start = datetime.combine(start_date, time.min)
+        if timezone.is_naive(dt_start):
+            dt_start = timezone.make_aware(dt_start)
+        tickets = tickets.filter(alarm_time__gte=dt_start)
+
+    end_date = parse_date(request.GET.get('to', ''))
+    if end_date:
+        dt_end = datetime.combine(end_date, time.max)
+        if timezone.is_naive(dt_end):
+            dt_end = timezone.make_aware(dt_end)
+        tickets = tickets.filter(alarm_time__lte=dt_end)
+
+    return tickets
+
+
 def breakdown_report_view(request):
     all_machines = CNCMachine.objects.filter(is_active=True).order_by('line_name', 'machine_code')
     lines = all_machines.values_list('line_name', flat=True).distinct().order_by('line_name')
     selected_line = request.GET.get('line', '')
     selected_machine = request.GET.get('machine', '')
-    start_date = parse_date(request.GET.get('from', ''))
-    end_date = parse_date(request.GET.get('to', ''))
 
     machine_options = all_machines
     if selected_line == '__unassigned__':
@@ -727,20 +769,7 @@ def breakdown_report_view(request):
     elif selected_line:
         machine_options = machine_options.filter(line_name=selected_line)
 
-    tickets = BreakdownTicket.objects.select_related(
-        'machine', 'technician', 'failure_sub_category__category'
-    ).prefetch_related('spares_used__spare_part').order_by('-alarm_time')
-
-    if selected_line == '__unassigned__':
-        tickets = tickets.filter(machine__line_name='')
-    elif selected_line:
-        tickets = tickets.filter(machine__line_name=selected_line)
-    if selected_machine:
-        tickets = tickets.filter(machine__machine_code=selected_machine)
-    if start_date:
-        tickets = tickets.filter(alarm_time__date__gte=start_date)
-    if end_date:
-        tickets = tickets.filter(alarm_time__date__lte=end_date)
+    tickets = _filter_tickets_queryset(request)
 
     if request.GET.get('download') == 'csv':
         response = HttpResponse(content_type='text/csv; charset=utf-8')
@@ -788,7 +817,7 @@ def breakdown_report_view(request):
         'end_date': request.GET.get('to', ''),
         'ticket_count': tickets.count(),
         'total_cost': summary['total_cost'] or Decimal('0.00'),
-        'total_downtime': summary['total_downtime'] or 0,
+        'total_downtime': format_duration(summary['total_downtime'] or 0),
     })
 
 
@@ -989,7 +1018,7 @@ def export_tickets_excel(request):
         cell.fill = header_fill
         cell.alignment = alignment
 
-    tickets = BreakdownTicket.objects.select_related('machine', 'failure_sub_category__category').order_by('-alarm_time')
+    tickets = _filter_tickets_queryset(request)
 
     for row_idx, t in enumerate(tickets, 2):
         ws.cell(row=row_idx, column=1, value=t.ticket_number)
@@ -1034,7 +1063,7 @@ def export_tickets_pdf(request):
     story.append(Paragraph(f"Generated: {timezone.now().strftime('%d-%b-%Y %H:%M')}", styles['Normal']))
     story.append(Spacer(1, 15))
 
-    tickets = BreakdownTicket.objects.select_related('machine', 'failure_sub_category__category').order_by('-alarm_time')[:50]
+    tickets = _filter_tickets_queryset(request)[:50]
     data = [["Ticket", "Machine", "Status", "Alarm Time", "Response", "MTTR", "4M Category", "Cost (₹)"]]
 
     for t in tickets:

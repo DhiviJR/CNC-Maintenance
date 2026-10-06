@@ -51,7 +51,7 @@
                 <span class="block text-[11px] font-bold {% if ticket.scan_time %}text-emerald-700{% else %}text-slate-500{% endif %} uppercase">2. QR Scan (t_scan)</span>
                 {% if ticket.scan_time %}
                     <span class="font-bold text-sm text-emerald-900">{{ ticket.scan_time|date:"H:i:s" }}</span>
-                    <span class="block text-[11px] text-emerald-600">Response: {{ ticket.response_time_seconds|default:0|divisibleby:60|yesno:"m,s" }} {{ ticket.response_time_seconds|default:0 }}s</span>
+                    <span class="block text-[11px] text-emerald-600">Response: {{ ticket.formatted_response_time }}</span>
                 {% else %}
                     <span class="font-semibold text-sm text-amber-600">Pending QR Scan</span>
                     <span class="block text-[11px] text-slate-400">Waiting for on-site arrival</span>
@@ -63,7 +63,7 @@
                 <span class="block text-[11px] font-bold {% if ticket.resolve_time %}text-blue-700{% else %}text-slate-500{% endif %} uppercase">3. Resolved (t_resolve)</span>
                 {% if ticket.resolve_time %}
                     <span class="font-bold text-sm text-blue-900">{{ ticket.resolve_time|date:"H:i:s" }}</span>
-                    <span class="block text-[11px] text-blue-600">Repair: {{ ticket.repair_time_seconds|default:0 }}s</span>
+                    <span class="block text-[11px] text-blue-600">Repair: {{ ticket.formatted_repair_time }}</span>
                 {% else %}
                     <span class="font-semibold text-sm text-slate-400">In Progress</span>
                 {% endif %}
@@ -74,7 +74,7 @@
                 <span class="block text-[11px] font-bold {% if ticket.next_run_time %}text-green-800{% else %}text-slate-500{% endif %} uppercase">4. Resumed (t_run)</span>
                 {% if ticket.next_run_time %}
                     <span class="font-bold text-sm text-green-900">{{ ticket.next_run_time|date:"H:i:s" }}</span>
-                    <span class="block text-[11px] text-green-600">Ramp Delay: {{ ticket.ramp_up_delay_seconds|default:0 }}s</span>
+                    <span class="block text-[11px] text-green-600">Ramp Delay: {{ ticket.formatted_ramp_up_delay }}</span>
                 {% else %}
                     <span class="font-semibold text-sm text-slate-400">Awaiting restart</span>
                 {% endif %}
@@ -98,7 +98,7 @@
     <!-- Step 3.c & 3.d: 4M Failure Root-Cause Diagnosis (Mastered) -->
     <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
         <h2 class="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
-            <i class="fa-solid fa-sitemap text-blue-600"></i> Step 3.c & 3.d: 4M Failure Root-Cause Classification
+            <i class="fa-solid fa-sitemap text-blue-600"></i> 4M Failure Root-Cause Classification
         </h2>
         <p class="text-xs text-slate-500 mb-4">Select the root-cause category and mastered sub-category (Man, Machine, Material, Method).</p>
 
@@ -170,7 +170,7 @@
         <div class="flex justify-between items-center mb-2">
             <div>
                 <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <i class="fa-solid fa-toolbox text-blue-600"></i> Step 3.e: Replaced Spare Parts & Tooling
+                    <i class="fa-solid fa-toolbox text-blue-600"></i> Replaced Spare Parts & Tooling
                 </h2>
                 <p class="text-xs text-slate-500">Mastered parts catalog with automatic cost calculation</p>
             </div>
@@ -255,10 +255,10 @@
         {% endif %}
     </div>
 
-    <!-- Step 3.f & 3.g: Resolution Complete & Production Resumption -->
+    <!-- Resolution Complete & Production Resumption -->
     <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
         <h2 class="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
-            <i class="fa-solid fa-flag-checkered text-blue-600"></i> Step 3.f & 3.g: Resolution & Production Resumption
+            <i class="fa-solid fa-flag-checkered text-blue-600"></i> Resolution & Production Resumption
         </h2>
 
         {% if ticket.status == 'ACKNOWLEDGED' or ticket.status == 'UNDER_REPAIR' %}
@@ -291,7 +291,7 @@
         {% elif ticket.status == 'RESOLVED' %}
         <div class="bg-emerald-50 border border-emerald-200 p-5 rounded-lg text-center mt-3">
             <h3 class="font-bold text-emerald-900 text-base"><i class="fa-solid fa-circle-check mr-1"></i> Repair Completed</h3>
-            <p class="text-xs text-emerald-700 mt-2">Total Downtime (MTTR): <strong>{{ ticket.total_downtime_seconds|default:0 }} seconds</strong>.</p>
+            <p class="text-xs text-emerald-700 mt-2">Total Downtime (MTTR): <strong>{{ ticket.formatted_total_downtime }}</strong>.</p>
             {% if ticket.resolution_notes %}<p class="text-sm text-slate-700 mt-3"><strong>Repair notes:</strong> {{ ticket.resolution_notes }}</p>{% endif %}
         </div>
 

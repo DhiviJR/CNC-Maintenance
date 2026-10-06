@@ -121,3 +121,29 @@ class MaintenanceWorkflowTest(TestCase):
         ticket.save()
         self.assertEqual(ticket.ramp_up_delay_seconds, 300)   # 5 minutes
 
+    def test_breakdown_report_date_filtering(self):
+        from django.contrib.auth.models import User
+        user = User.objects.create_user(username='test_admin', password='password')
+        self.client.force_login(user)
+
+        t1 = timezone.now() - timedelta(days=5)
+        t2 = timezone.now()
+        ticket1 = BreakdownTicket.objects.create(machine=self.machine, alarm_time=t1)
+        ticket2 = BreakdownTicket.objects.create(machine=self.machine, alarm_time=t2)
+
+        from_date = t2.strftime('%Y-%m-%d')
+        to_date = t2.strftime('%Y-%m-%d')
+
+        response = self.client.get(f'/reports/breakdowns/?from={from_date}&to={to_date}')
+        self.assertEqual(response.status_code, 200)
+        tickets_in_context = response.context['tickets']
+        self.assertIn(ticket2, tickets_in_context)
+        self.assertNotIn(ticket1, tickets_in_context)
+
+    def test_duration_formatting(self):
+        from maintenance.templatetags.duration_tags import format_duration
+        self.assertEqual(format_duration(45), "45s")
+        self.assertEqual(format_duration(125), "2m:05s")
+        self.assertEqual(format_duration(3725), "1h:02m:05s")
+        self.assertEqual(format_duration(90065), "1d:01h:01m:05s")
+

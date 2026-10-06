@@ -138,8 +138,13 @@
                     <span id="duration-{{ m.machine_code }}" class="font-bold text-slate-200">{{ m.last_status_change|timesince }}</span>
                 </div>
             </div>
-            <a href="{% url 'scanner' %}?target_machine={{ m.machine_code }}{% if m.active_ticket %}&amp;ticket_id={{ m.active_ticket.id }}{% endif %}" class="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500">
+            <!-- Action Buttons for Shop Floor Maintenance -->
+            <a id="scan-btn-{{ m.machine_code }}" href="{% url 'scanner' %}?target_machine={{ m.machine_code }}{% if m.active_ticket %}&amp;ticket_id={{ m.active_ticket.id }}{% endif %}" class="{% if m.current_status != 'ALARM' and m.current_status != 'EMERGENCY_STOP' and m.active_ticket.status != 'OPEN_ALARM' %}hidden {% endif %}mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-500 shadow-sm">
                 <i class="fa-solid fa-qrcode"></i> Scan QR &amp; Attend
+            </a>
+
+            <a id="repair-btn-{{ m.machine_code }}" href="{% if m.active_ticket %}{% url 'ticket_detail' m.active_ticket.id %}{% else %}#{% endif %}" class="{% if m.current_status != 'UNDER_MAINTENANCE' and m.active_ticket.status != 'ACKNOWLEDGED' and m.active_ticket.status != 'UNDER_REPAIR' %}hidden {% endif %}mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-950 px-3 py-2 text-xs font-bold shadow-sm">
+                <i class="fa-solid fa-screwdriver-wrench"></i> Continue Repair
             </a>
         </div>
         {% endfor %}
@@ -280,9 +285,39 @@
 
                     // Update Machine Cards dynamically
                     if (data.machines) {
+                        const activeTicketMap = {};
+                        (data.active_tickets || []).forEach(t => {
+                            activeTicketMap[t.machine__machine_code] = t;
+                        });
+
                         data.machines.forEach(m => {
                             const card = document.getElementById(`card-${m.machine_code}`);
                             const badge = document.getElementById(`badge-${m.machine_code}`);
+                            const scanBtn = document.getElementById(`scan-btn-${m.machine_code}`);
+                            const repairBtn = document.getElementById(`repair-btn-${m.machine_code}`);
+                            const activeTicket = activeTicketMap[m.machine_code];
+
+                            if (scanBtn) {
+                                if (m.current_status === 'ALARM' || m.current_status === 'EMERGENCY_STOP' || (activeTicket && activeTicket.status === 'OPEN_ALARM')) {
+                                    scanBtn.classList.remove('hidden');
+                                    let href = `/scanner/?target_machine=${m.machine_code}`;
+                                    if (activeTicket) href += `&ticket_id=${activeTicket.id}`;
+                                    scanBtn.setAttribute('href', href);
+                                } else {
+                                    scanBtn.classList.add('hidden');
+                                }
+                            }
+
+                            if (repairBtn) {
+                                if (m.current_status === 'UNDER_MAINTENANCE' || (activeTicket && (activeTicket.status === 'ACKNOWLEDGED' || activeTicket.status === 'UNDER_REPAIR'))) {
+                                    repairBtn.classList.remove('hidden');
+                                    if (activeTicket) {
+                                        repairBtn.setAttribute('href', `/tickets/${activeTicket.id}/`);
+                                    }
+                                } else {
+                                    repairBtn.classList.add('hidden');
+                                }
+                            }
                             if (card && badge) {
                                 if (m.current_status === 'ALARM' || m.current_status === 'EMERGENCY_STOP') {
                                     card.className = "rounded-2xl p-5 border flex flex-col justify-between transition-all duration-300 alarm-flash border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.5)]";

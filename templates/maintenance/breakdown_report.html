@@ -63,7 +63,7 @@
         </div>
         <div id="report-downtime-summary">
             <div>Total Recorded Downtime</div>
-            <div>{{ total_downtime }} sec</div>
+            <div>{{ total_downtime }}</div>
         </div>
     </div>
 
@@ -107,7 +107,7 @@
                         <td>{{ ticket.diagnosed_time|date:'Y-m-d H:i'|default:'—' }}</td>
                         <td>{{ ticket.resolve_time|date:'Y-m-d H:i'|default:'—' }}</td>
                         <td>{{ ticket.next_run_time|date:'Y-m-d H:i'|default:'—' }}</td>
-                        <td>{{ ticket.response_time_seconds|default:0 }} / {{ ticket.repair_time_seconds|default:0 }} / {{ ticket.total_downtime_seconds|default:0 }} sec</td>
+                        <td>{{ ticket.formatted_response_time }} / {{ ticket.formatted_repair_time }} / {{ ticket.formatted_total_downtime }}</td>
                         <td>
                             {% if ticket.failure_sub_category %}
                                 {{ ticket.failure_sub_category.category.name }}<br>{{ ticket.failure_sub_category.name }}

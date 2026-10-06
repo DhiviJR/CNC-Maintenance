@@ -20,8 +20,6 @@ urlpatterns = [
     path('tickets/', views.ticket_list_view, name='ticket_list'),
     path('reports/breakdowns/', views.breakdown_report_view, name='breakdown_report'),
     path('tickets/<int:ticket_id>/', views.ticket_detail_view, name='ticket_detail'),
-    path('tickets/create/<str:machine_code>/', views.create_ticket_for_machine, name='create_ticket_for_machine'),
-
     # 4. Industrial Additions: Andon Board & Interactive Simulator
     path('andon/', views.andon_board_view, name='andon_board'),
     path('preventive-maintenance/', views.preventive_maintenance_view, name='preventive_maintenance'),

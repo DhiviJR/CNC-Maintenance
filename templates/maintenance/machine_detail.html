@@ -34,9 +34,6 @@
             <a href="{% url 'qr_print' machine.machine_code %}" target="_blank" class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5">
                 <i class="fa-solid fa-print"></i> Print QR
             </a>
-            <a href="{% url 'create_ticket_for_machine' machine.machine_code %}" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5">
-                <i class="fa-solid fa-triangle-exclamation"></i> Log Incident
-            </a>
         </div>
     </div>
 
@@ -49,11 +46,6 @@
                 <img src="{{ machine.qr_code_image.url }}" alt="QR Code" class="w-48 h-48 mx-auto border-2 border-slate-200 rounded-lg p-2 shadow-xs">
                 {% endif %}
                 <p class="text-xs text-slate-500 mt-3 font-mono">Payload: CNC_MACHINE:{{ machine.machine_code }}</p>
-                <div class="mt-4">
-                    <a href="{% url 'scan_machine' machine.machine_code %}" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg inline-flex items-center gap-1.5">
-                        <i class="fa-solid fa-qrcode"></i> Test Scan Attendance
-                    </a>
-                </div>
             </div>
 
             <!-- FOCAS Connection Settings -->
@@ -106,10 +98,10 @@
                                     </span>
                                 </td>
                                 <td class="py-2.5 px-3 text-center text-slate-600">
-                                    {% if t.response_time_seconds %}{{ t.response_time_seconds }}s{% else %}-{% endif %}
+                                    {% if t.response_time_seconds %}{{ t.formatted_response_time }}{% else %}-{% endif %}
                                 </td>
                                 <td class="py-2.5 px-3 text-center font-medium text-slate-800">
-                                    {% if t.total_downtime_seconds %}{{ t.total_downtime_seconds|divisibleby:60|yesno:"m,s" }} {{ t.total_downtime_seconds }}s{% else %}-{% endif %}
+                                    {% if t.total_downtime_seconds %}{{ t.formatted_total_downtime }}{% else %}-{% endif %}
                                 </td>
                                 <td class="py-2.5 px-3 text-slate-600">
                                     {{ t.failure_sub_category.name|default:"-" }}

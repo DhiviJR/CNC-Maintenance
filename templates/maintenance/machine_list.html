@@ -90,15 +90,6 @@
                             <i class="fa-solid fa-qrcode mr-1"></i> Print QR
                         </a>
                     </div>
-                    {% if m.current_status == 'ALARM' or m.current_status == 'EMERGENCY_STOP' %}
-                    <a href="{% url 'scan_machine' m.machine_code %}" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-700">
-                        <i class="fa-solid fa-triangle-exclamation"></i> Attend Alarm
-                    </a>
-                    {% else %}
-                    <a href="{% url 'create_ticket_for_machine' m.machine_code %}" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 shadow-sm transition-colors hover:border-amber-300 hover:bg-amber-100">
-                        <i class="fa-solid fa-circle-plus"></i> Log Issue
-                    </a>
-                    {% endif %}
                 </div>
 
                 <div class="grid grid-cols-3 gap-2">

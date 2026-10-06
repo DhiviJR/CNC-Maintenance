@@ -125,12 +125,12 @@
                         <td class="py-3 px-4 text-slate-600 text-xs">{{ t.alarm_time|date:"d M Y H:i" }}</td>
                         <td class="py-3 px-4 text-center text-xs font-medium text-slate-700">
                             {% if t.response_time_seconds != None %}
-                                {{ t.response_time_seconds|divisibleby:60|yesno:"m,s" }} {{ t.response_time_seconds }}s
+                                {{ t.formatted_response_time }}
                             {% else %}-{% endif %}
                         </td>
                         <td class="py-3 px-4 text-center text-xs font-bold text-slate-800">
                             {% if t.total_downtime_seconds != None %}
-                                {{ t.total_downtime_seconds|divisibleby:60|yesno:"m,s" }} {{ t.total_downtime_seconds }}s
+                                {{ t.formatted_total_downtime }}
                             {% else %}-{% endif %}
                         </td>
                         <td class="py-3 px-4 text-xs text-slate-600">

@@ -290,6 +290,26 @@ class BreakdownTicket(models.Model):
         self.total_spares_cost = total
         self.save(update_fields=['total_spares_cost'])
 
+    @property
+    def formatted_response_time(self):
+        from maintenance.templatetags.duration_tags import format_duration
+        return format_duration(self.response_time_seconds)
+
+    @property
+    def formatted_repair_time(self):
+        from maintenance.templatetags.duration_tags import format_duration
+        return format_duration(self.repair_time_seconds)
+
+    @property
+    def formatted_total_downtime(self):
+        from maintenance.templatetags.duration_tags import format_duration
+        return format_duration(self.total_downtime_seconds)
+
+    @property
+    def formatted_ramp_up_delay(self):
+        from maintenance.templatetags.duration_tags import format_duration
+        return format_duration(self.ramp_up_delay_seconds)
+
 
 class TicketSpareUsage(models.Model):
     ticket = models.ForeignKey(BreakdownTicket, on_delete=models.CASCADE, related_name='spares_used')
